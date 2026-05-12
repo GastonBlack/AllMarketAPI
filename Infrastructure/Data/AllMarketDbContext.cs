@@ -65,7 +65,7 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
                 .HasDefaultValue(true);
 
             entity.Property(user => user.CreatedAt)
-                .HasDefaultValueSql("SYSUTCDATETIME()");
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasMany(user => user.Orders)
                 .WithOne(order => order.User)
@@ -76,11 +76,11 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
             {
                 table.HasCheckConstraint(
                     "CK_Users_Rol",
-                    $"[Rol] IN ('{Roles.Admin}', '{Roles.User}')");
+                    $"\"Rol\" IN ('{Roles.Admin}', '{Roles.User}')");
 
                 table.HasCheckConstraint(
                     "CK_Users_DisabledAt",
-                    "[DisabledAt] IS NULL OR [DisabledAt] >= [CreatedAt]");
+                    "\"DisabledAt\" IS NULL OR \"DisabledAt\" >= \"CreatedAt\"");
             });
         });
     }
@@ -138,7 +138,7 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
                 .HasDefaultValue(true);
 
             entity.Property(product => product.CreatedAt)
-                .HasDefaultValueSql("SYSUTCDATETIME()");
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.Property(product => product.ImageUrl)
                 .HasMaxLength(500);
@@ -152,23 +152,23 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
             {
                 table.HasCheckConstraint(
                     "CK_Products_Price",
-                    "[Price] > 0");
+                    "\"Price\" > 0");
 
                 table.HasCheckConstraint(
                     "CK_Products_Stock",
-                    "[Stock] >= 0");
+                    "\"Stock\" >= 0");
 
                 table.HasCheckConstraint(
                     "CK_Products_ReservedStock",
-                    "[ReservedStock] >= 0 AND [ReservedStock] <= [Stock]");
+                    "\"ReservedStock\" >= 0 AND \"ReservedStock\" <= \"Stock\"");
 
                 table.HasCheckConstraint(
                     "CK_Products_TotalSold",
-                    "[TotalSold] >= 0");
+                    "\"TotalSold\" >= 0");
 
                 table.HasCheckConstraint(
                     "CK_Products_Discount",
-                    "([HasDiscount] = 0 AND [DiscountPrice] IS NULL) OR ([HasDiscount] = 1 AND [DiscountPrice] IS NOT NULL AND [DiscountPrice] > 0 AND [DiscountPrice] < [Price])");
+                    "(\"HasDiscount\" = FALSE AND \"DiscountPrice\" IS NULL) OR (\"HasDiscount\" = TRUE AND \"DiscountPrice\" IS NOT NULL AND \"DiscountPrice\" > 0 AND \"DiscountPrice\" < \"Price\")");
             });
         });
     }
@@ -188,10 +188,10 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
                 .HasColumnType("decimal(18,2)");
 
             entity.Property(order => order.CreatedAt)
-                .HasDefaultValueSql("SYSUTCDATETIME()");
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.Property(order => order.ReservationExpiresAt)
-                .HasDefaultValueSql("DATEADD(minute, 15, SYSUTCDATETIME())");
+                .HasDefaultValueSql("CURRENT_TIMESTAMP + INTERVAL '15 minutes'");
 
             entity.HasMany(order => order.Items)
                 .WithOne(item => item.Order)
@@ -202,15 +202,15 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
             {
                 table.HasCheckConstraint(
                     "CK_Orders_Status",
-                    $"[Status] IN ('{Statuses.AwaitingPayment}', '{Statuses.Paid}', '{Statuses.Preparing}', '{Statuses.Shipped}', '{Statuses.Delivered}', '{Statuses.Cancelled}', '{Statuses.Expired}')");
+                    $"\"Status\" IN ('{Statuses.AwaitingPayment}', '{Statuses.Paid}', '{Statuses.Preparing}', '{Statuses.Shipped}', '{Statuses.Delivered}', '{Statuses.Cancelled}', '{Statuses.Expired}')");
 
                 table.HasCheckConstraint(
                     "CK_Orders_TotalPrice",
-                    "[TotalPrice] >= 0");
+                    "\"TotalPrice\" >= 0");
 
                 table.HasCheckConstraint(
                     "CK_Orders_ReservationExpiresAt",
-                    "[ReservationExpiresAt] IS NULL OR [ReservationExpiresAt] >= [CreatedAt]");
+                    "\"ReservationExpiresAt\" IS NULL OR \"ReservationExpiresAt\" >= \"CreatedAt\"");
             });
         });
     }
@@ -239,11 +239,11 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
             {
                 table.HasCheckConstraint(
                     "CK_OrderItems_Quantity",
-                    "[Quantity] > 0");
+                    "\"Quantity\" > 0");
 
                 table.HasCheckConstraint(
                     "CK_OrderItems_PriceAtPurchase",
-                    "[PriceAtPurchase] > 0");
+                    "\"PriceAtPurchase\" > 0");
             });
         });
     }
