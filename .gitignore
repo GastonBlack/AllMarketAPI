@@ -11,6 +11,7 @@ obj/
 
 # Local development settings
 appsettings.Development.json
+.env
 
 # IDE folders
 .vs/
