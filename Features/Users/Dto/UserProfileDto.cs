@@ -7,6 +7,5 @@ public class UserProfileDto
     public required string Email { get; set; }
     public required string Address { get; set; }
     public string? Phone { get; set; }
-    public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
 }
