@@ -7,6 +7,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: ${DB_CONNECTION}
+      Jwt__SecretKey: ${JWT__SECRETKEY}
+      Jwt__Issuer: ${JWT__ISSUER}
+      Jwt__Audience: ${JWT__AUDIENCE}
+      Jwt__ExpirationMinutes: ${JWT__EXPIRATIONMINUTES}
+      Cors__AllowedOrigins__0: ${Cors__AllowedOrigins__0}
     depends_on:
       postgres:
         condition: service_healthy
