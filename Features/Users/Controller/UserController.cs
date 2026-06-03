@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using AllMarket.Features.Users.Dto;
 using AllMarket.Features.Users.Services;
+using AllMarket.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -26,7 +26,7 @@ public class UserController : ControllerBase
     [HttpGet("me")]
     public async Task<IActionResult> GetUserInfoAsync()
     {
-        int userId = GetAuthenticatedUserId();
+        int userId = User.GetAuthenticatedUserId();
         return Ok(await _service.GetUserInfoAsync(userId));
 
     }
@@ -34,7 +34,7 @@ public class UserController : ControllerBase
     [HttpGet("me/history")]
     public async Task<IActionResult> GetUserOrderHistoryAsync()
     {
-        int userId = GetAuthenticatedUserId();
+        int userId = User.GetAuthenticatedUserId();
         return Ok(await _service.GetUserOrderHistoryAsync(userId));
     }
 
@@ -44,23 +44,14 @@ public class UserController : ControllerBase
     [HttpPatch("update")]
     public async Task<IActionResult> UpdateUserInfoAsync([FromBody] UpdateUserProfileDto dto)
     {
-        int userId = GetAuthenticatedUserId();
+        int userId = User.GetAuthenticatedUserId();
         return Ok(await _service.UpdateUserInfoAsync(dto, userId));
     }
 
     [HttpPut("me/password")]
     public async Task<IActionResult> ChangePasswordAsync([FromBody] ChangePasswordDto dto)
     {
-        int userId = GetAuthenticatedUserId();
+        int userId = User.GetAuthenticatedUserId();
         return Ok(await _service.ChangePasswordAsync(dto, userId));
-    }
-
-    // //////////////////////////////////////////
-    // Helpers
-    // //////////////////////////////////////////
-    private int GetAuthenticatedUserId()
-    {
-        // Get user's ID from JWT.
-        return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     }
 }

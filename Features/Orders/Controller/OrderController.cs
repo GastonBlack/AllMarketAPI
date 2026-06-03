@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using AllMarket.Features.Orders.Dto;
 using AllMarket.Features.Orders.Services;
+using AllMarket.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -26,15 +26,7 @@ public class OrderController : ControllerBase
     [HttpPost("checkout")]
     public async Task<IActionResult> CheckoutAsync([FromBody] CreateOrderDto dto)
     {
-        int userId = GetAuthenticatedUserId();
+        int userId = User.GetAuthenticatedUserId();
         return Ok(await _service.CheckoutAsync(dto, userId));
-    }
-
-    // //////////////////////////////////////////
-    // Helpers
-    // //////////////////////////////////////////
-    private int GetAuthenticatedUserId()
-    {
-        return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     }
 }
