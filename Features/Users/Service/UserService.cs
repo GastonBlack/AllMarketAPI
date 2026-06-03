@@ -26,8 +26,10 @@ public class UserService : IUserService
     {
         return new UserProfileDto
         {
+            Id = user.Id,
             FullName = user.FullName,
             Email = user.Email,
+            Rol = user.Rol,
             Address = user.Address,
             Phone = user.Phone,
             CreatedAt = user.CreatedAt
@@ -105,4 +107,23 @@ public class UserService : IUserService
 
         return history ?? throw new NotFoundException("User not found.");
     }
+
+    public async Task<bool> ChangePasswordAsync(ChangePasswordDto dto, int userId)
+    {
+        if (dto == null) throw new BadRequestException("Invalid data.");
+
+        if (dto.CurrentPassword == dto.NewPassword) throw new BadRequestException("New password can not be the same as the old password.");
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null) throw new NotFoundException("User not found.");
+
+        if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
+            throw new BadRequestException("Password does not match.");
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        await _db.SaveChangesAsync();
+
+        return true;
+    }
+    
 }

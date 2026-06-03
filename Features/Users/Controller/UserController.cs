@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace AllMarket.Features.Users.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/users")]
 [Authorize] // Only users with JWT Token.
 public class UserController : ControllerBase
 {
@@ -48,11 +48,19 @@ public class UserController : ControllerBase
         return Ok(await _service.UpdateUserInfoAsync(dto, userId));
     }
 
+    [HttpPut("me/password")]
+    public async Task<IActionResult> ChangePasswordAsync([FromBody] ChangePasswordDto dto)
+    {
+        int userId = GetAuthenticatedUserId();
+        return Ok(await _service.ChangePasswordAsync(dto, userId));
+    }
+
     // //////////////////////////////////////////
     // Helpers
     // //////////////////////////////////////////
     private int GetAuthenticatedUserId()
     {
+        // Get user's ID from JWT.
         return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     }
 }
