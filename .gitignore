@@ -17,3 +17,7 @@ appsettings.Development.json
 .vs/
 .vscode/
 .idea/
+
+# AI Agents
+skills-lock.json
+.agents
