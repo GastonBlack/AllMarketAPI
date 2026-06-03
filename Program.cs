@@ -1,10 +1,16 @@
 using System.Text;
+using AllMarket.Features.Admin.Categories.Services;
+using AllMarket.Features.Admin.Orders.Services;
+using AllMarket.Features.Admin.Products.Services;
+using AllMarket.Features.Admin.Users.Services;
 using AllMarket.Features.Auth.Security;
 using AllMarket.Features.Auth.Services;
 using AllMarket.Features.Categories.Services;
+using AllMarket.Features.Orders.Services;
 using AllMarket.Features.Products.Services;
 using AllMarket.Features.Users.Services;
 using AllMarket.Infrastructure.Data;
+using AllMarket.Infrastructure.Data.Seed;
 using AllMarket.Infrastructure.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +33,11 @@ builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductServices>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IAdminProductService, AdminProductService>();
+builder.Services.AddScoped<IAdminCategoryService, AdminCategoryService>();
+builder.Services.AddScoped<IAdminOrderService, AdminOrderService>();
+builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 
 // //////////////////////////////////////////
 // Authentication
@@ -107,6 +118,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    await DatabaseSeeder.SeedAsync(app.Services);
 }
 
 // //////////////////////////////////////////
