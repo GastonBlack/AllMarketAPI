@@ -10,6 +10,9 @@ namespace AllMarket.Features.Auth.Services;
 
 public class AuthService : IAuthService
 {
+    // Runs BCrypt even when the email does not exist to reduce timing leaks.
+    private static readonly string DummyPasswordHash = BCrypt.Net.BCrypt.HashPassword("dummy-password");
+
     // //////////////////////////////////////////
     // Inyections
     // //////////////////////////////////////////
@@ -83,10 +86,10 @@ public class AuthService : IAuthService
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == dto.Email);
 
-        if (user == null) throw new BadRequestException("Email/password incorrect.");
+        var passwordHash = user?.PasswordHash ?? DummyPasswordHash;
+        bool passwordMatch = BCrypt.Net.BCrypt.Verify(dto.Password, passwordHash);
 
-        bool passwordMatch = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
-        if (!passwordMatch) throw new BadRequestException("Email/password incorrect.");
+        if (user == null || !passwordMatch) throw new BadRequestException("Email/password incorrect.");
 
         // Generates JWT token.
         var token = _token.GenerateToken(user);
