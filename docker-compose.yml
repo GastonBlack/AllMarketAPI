@@ -12,6 +12,9 @@ services:
       Jwt__Audience: ${JWT__AUDIENCE}
       Jwt__ExpirationMinutes: ${JWT__EXPIRATIONMINUTES}
       Cors__AllowedOrigins__0: ${Cors__AllowedOrigins__0}
+      Stripe__SecretKey: ${STRIPE_SECRET_KEY}
+      Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET}
+      Frontend__Url: ${FRONTEND_URL}
     depends_on:
       postgres:
         condition: service_healthy
