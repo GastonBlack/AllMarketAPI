@@ -44,4 +44,16 @@ public class AdminUserController : ControllerBase
     {
         return Ok(await _service.UpdateUserStatusAsync(userId, dto, User.GetAuthenticatedUserId()));
     }
+
+    [HttpPut("{userId:int}/disable")]
+    public async Task<IActionResult> DisableUserAsync(int userId)
+    {
+        return Ok(await _service.DisableUserAsync(userId, User.GetAuthenticatedUserId()));
+    }
+
+    [HttpPut("{userId:int}/enable")]
+    public async Task<IActionResult> EnableUserAsync(int userId)
+    {
+        return Ok(await _service.EnableUserAsync(userId, User.GetAuthenticatedUserId()));
+    }
 }
