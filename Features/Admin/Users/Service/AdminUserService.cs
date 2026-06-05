@@ -29,7 +29,6 @@ public class AdminUserService : IAdminUserService
             Id = user.Id,
             FullName = user.FullName,
             Email = user.Email,
-            Phone = user.Phone,
             Rol = user.Rol,
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt,
@@ -80,29 +79,10 @@ public class AdminUserService : IAdminUserService
         var search = queryParams.Search?.Trim().ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var searchIsId = int.TryParse(search, out var userId);
-
             query = query.Where(user =>
-                (searchIsId && user.Id == userId) ||
                 user.FullName.ToLower().Contains(search) ||
-                user.Email.ToLower().Contains(search) ||
-                (user.Phone != null && user.Phone.Contains(search)));
+                user.Email.ToLower().Contains(search));
         }
-
-        if (queryParams.UserId.HasValue)
-            query = query.Where(user => user.Id == queryParams.UserId.Value);
-
-        var fullName = queryParams.FullName?.Trim().ToLowerInvariant();
-        if (!string.IsNullOrWhiteSpace(fullName))
-            query = query.Where(user => user.FullName.ToLower().Contains(fullName));
-
-        var email = queryParams.Email?.Trim().ToLowerInvariant();
-        if (!string.IsNullOrWhiteSpace(email))
-            query = query.Where(user => user.Email.ToLower().Contains(email));
-
-        var phone = queryParams.Phone?.Trim();
-        if (!string.IsNullOrWhiteSpace(phone))
-            query = query.Where(user => user.Phone != null && user.Phone.Contains(phone));
 
         query = query.OrderBy(user => user.FullName).ThenBy(user => user.Id);
 
@@ -134,21 +114,6 @@ public class AdminUserService : IAdminUserService
     {
         if (dto == null) throw new BadRequestException("Invalid data.");
 
-        return await SetUserStatusAsync(userId, dto.IsActive, currentAdminUserId);
-    }
-
-    public async Task<AdminUserDetailResponseDto> DisableUserAsync(int userId, int currentAdminUserId)
-    {
-        return await SetUserStatusAsync(userId, false, currentAdminUserId);
-    }
-
-    public async Task<AdminUserDetailResponseDto> EnableUserAsync(int userId, int currentAdminUserId)
-    {
-        return await SetUserStatusAsync(userId, true, currentAdminUserId);
-    }
-
-    private async Task<AdminUserDetailResponseDto> SetUserStatusAsync(int userId, bool isActive, int currentAdminUserId)
-    {
         var user = await _db.Users
             .Include(user => user.Orders)
             .FirstOrDefaultAsync(user => user.Id == userId)
@@ -160,8 +125,8 @@ public class AdminUserService : IAdminUserService
         if (user.Rol == Roles.Admin)
             throw new BadRequestException("Admin users are not editable from this action.");
 
-        user.IsActive = isActive;
-        user.DisabledAt = isActive ? null : DateTime.UtcNow;
+        user.IsActive = dto.IsActive;
+        user.DisabledAt = dto.IsActive ? null : DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
 

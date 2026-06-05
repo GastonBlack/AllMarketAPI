@@ -129,23 +129,8 @@ public class AdminOrderService : IAdminOrderService
                 order.User.Email.ToLower().Contains(search));
         }
 
-        if (queryParams.OrderId.HasValue)
-            query = query.Where(order => order.Id == queryParams.OrderId.Value);
-
-        var userName = queryParams.UserName?.Trim().ToLowerInvariant();
-        if (!string.IsNullOrWhiteSpace(userName))
-            query = query.Where(order => order.User.FullName.ToLower().Contains(userName));
-
-        var userEmail = queryParams.UserEmail?.Trim().ToLowerInvariant();
-        if (!string.IsNullOrWhiteSpace(userEmail))
-            query = query.Where(order => order.User.Email.ToLower().Contains(userEmail));
-
-        var status = queryParams.Status?.Trim();
-        if (!string.IsNullOrWhiteSpace(status))
-        {
-            if (!ValidStatuses.Contains(status)) throw new BadRequestException("Invalid order status.");
-            query = query.Where(order => order.Status == status);
-        }
+        if (!string.IsNullOrWhiteSpace(queryParams.Status))
+            query = query.Where(order => order.Status == queryParams.Status);
 
         if (queryParams.FromDate.HasValue)
             query = query.Where(order => order.CreatedAt >= queryParams.FromDate.Value);
@@ -153,7 +138,7 @@ public class AdminOrderService : IAdminOrderService
         if (queryParams.ToDate.HasValue)
             query = query.Where(order => order.CreatedAt <= queryParams.ToDate.Value);
 
-        query = query.OrderBy(order => order.CreatedAt).ThenBy(order => order.Id);
+        query = query.OrderByDescending(order => order.CreatedAt).ThenByDescending(order => order.Id);
 
         var totalItems = await query.CountAsync();
         var orders = await query

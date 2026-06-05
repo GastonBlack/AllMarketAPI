@@ -7,9 +7,6 @@ public class AdminOrderQueryParams
     public const int MaxPageSize = 100;
 
     public string? Search { get; set; }
-    public int? OrderId { get; set; }
-    public string? UserName { get; set; }
-    public string? UserEmail { get; set; }
     public string? Status { get; set; }
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }

@@ -7,11 +7,7 @@ public class AdminUserQueryParams
     public const int MaxPageSize = 100;
 
     public string? Search { get; set; }
-    public int? UserId { get; set; }
-    public string? FullName { get; set; }
-    public string? Email { get; set; }
-    public string? Phone { get; set; }
-    public bool IncludeDisabled { get; set; } = false;
+    public bool IncludeDisabled { get; set; }
     public int Page { get; set; } = DefaultPage;
     public int PageSize { get; set; } = DefaultPageSize;
 }

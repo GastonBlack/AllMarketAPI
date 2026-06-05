@@ -3,7 +3,6 @@ using AllMarket.Features.Categories.Models;
 using AllMarket.Helpers.Formatting;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Exceptions;
-using AllMarket.Infrastructure.Responses;
 using Microsoft.EntityFrameworkCore;
 
 namespace AllMarket.Features.Admin.Categories.Services;
@@ -22,24 +21,13 @@ public class AdminCategoryService : IAdminCategoryService
     // //////////////////////////////////////////
     // Class Helpers
     // //////////////////////////////////////////
-    private static AdminCategoryResponseDto MapToDto(Category category, int productCount = 0)
+    private static AdminCategoryResponseDto MapToDto(Category category)
     {
         return new AdminCategoryResponseDto
         {
             Id = category.Id,
-            Name = category.Name,
-            ProductCount = productCount,
-            HasProducts = productCount > 0
+            Name = category.Name
         };
-    }
-
-    private async Task<AdminCategoryResponseDto> MapToDtoAsync(Category category)
-    {
-        var productCount = await _db.Products
-            .AsNoTracking()
-            .CountAsync(product => product.CategoryId == category.Id);
-
-        return MapToDto(category, productCount);
     }
 
     private async Task<bool> CategoryAlreadyExistsAsync(string categoryName, int? categoryIdToIgnore = null)
@@ -59,17 +47,9 @@ public class AdminCategoryService : IAdminCategoryService
     // //////////////////////////////////////////
     // Getters
     // //////////////////////////////////////////
-    public async Task<PaginatedResponse<AdminCategoryResponseDto>> GetCategoriesAsync(AdminCategoryQueryParams queryParams)
+    public async Task<List<AdminCategoryResponseDto>> GetCategoriesAsync(AdminCategoryQueryParams queryParams)
     {
         queryParams ??= new AdminCategoryQueryParams();
-
-        var page = queryParams.Page < 1 ? AdminCategoryQueryParams.DefaultPage : queryParams.Page;
-        var pageSize = queryParams.PageSize switch
-        {
-            < 1 => AdminCategoryQueryParams.DefaultPageSize,
-            > AdminCategoryQueryParams.MaxPageSize => AdminCategoryQueryParams.MaxPageSize,
-            _ => queryParams.PageSize
-        };
 
         var query = _db.Categories
             .AsNoTracking()
@@ -77,33 +57,12 @@ public class AdminCategoryService : IAdminCategoryService
 
         var search = queryParams.Search?.Trim().ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(search))
-        {
-            var searchIsId = int.TryParse(search, out var categoryId);
+            query = query.Where(category => category.Name.ToLower().Contains(search));
 
-            query = query.Where(category =>
-                (searchIsId && category.Id == categoryId) ||
-                category.Name.ToLower().Contains(search));
-        }
-
-        if (queryParams.OnlyWithoutProducts)
-            query = query.Where(category => !_db.Products.Any(product => product.CategoryId == category.Id));
-
-        query = query.OrderBy(category => category.Name).ThenBy(category => category.Id);
-
-        var totalItems = await query.CountAsync();
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(category => new AdminCategoryResponseDto
-            {
-                Id = category.Id,
-                Name = category.Name,
-                ProductCount = _db.Products.Count(product => product.CategoryId == category.Id),
-                HasProducts = _db.Products.Any(product => product.CategoryId == category.Id)
-            })
+        return await query
+            .OrderBy(category => category.Name)
+            .Select(category => MapToDto(category))
             .ToListAsync();
-
-        return new PaginatedResponse<AdminCategoryResponseDto>(items, page, pageSize, totalItems);
     }
 
     // //////////////////////////////////////////
@@ -142,7 +101,7 @@ public class AdminCategoryService : IAdminCategoryService
         category.Name = normalizedName;
         await _db.SaveChangesAsync();
 
-        return await MapToDtoAsync(category);
+        return MapToDto(category);
     }
 
     public async Task<bool> DeleteCategoryAsync(int categoryId)

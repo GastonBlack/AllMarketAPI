@@ -21,6 +21,13 @@ public class AdminProductService : IAdminProductService
     // //////////////////////////////////////////
     // Class Helpers
     // //////////////////////////////////////////
+    private static decimal GetDisplayPrice(Product product)
+    {
+        return product.HasDiscount && product.DiscountPrice.HasValue
+            ? product.DiscountPrice.Value
+            : product.Price;
+    }
+
     private static AdminProductResponseDto MapToDto(Product product)
     {
         return new AdminProductResponseDto
@@ -50,10 +57,6 @@ public class AdminProductService : IAdminProductService
             null or "" => query.OrderBy(product => product.Id),
             "stock_asc" => query.OrderBy(product => product.Stock).ThenBy(product => product.Id),
             "stock_desc" => query.OrderByDescending(product => product.Stock).ThenBy(product => product.Id),
-            "reserved_asc" => query.OrderBy(product => product.ReservedStock).ThenBy(product => product.Id),
-            "reserved_desc" => query.OrderByDescending(product => product.ReservedStock).ThenBy(product => product.Id),
-            "available_asc" => query.OrderBy(product => product.Stock - product.ReservedStock).ThenBy(product => product.Id),
-            "available_desc" => query.OrderByDescending(product => product.Stock - product.ReservedStock).ThenBy(product => product.Id),
             "sold_desc" => query.OrderByDescending(product => product.TotalSold).ThenBy(product => product.Id),
             "price_asc" => query
                 .OrderBy(product => product.HasDiscount && product.DiscountPrice.HasValue
@@ -100,45 +103,19 @@ public class AdminProductService : IAdminProductService
             .Include(product => product.Category)
             .AsQueryable();
 
-        if (!queryParams.IncludeDisabled)
-            query = query.Where(product => product.IsActive);
-
         var search = queryParams.Search?.Trim().ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var searchIsId = int.TryParse(search, out var productId);
-
             query = query.Where(product =>
-                (searchIsId && product.Id == productId) ||
-                product.Name.ToLower().Contains(search));
+                product.Name.ToLower().Contains(search) ||
+                product.Description.ToLower().Contains(search));
         }
 
         if (queryParams.CategoryId.HasValue)
             query = query.Where(product => product.CategoryId == queryParams.CategoryId.Value);
 
-        if (queryParams.MinStock.HasValue)
-            query = query.Where(product => product.Stock >= queryParams.MinStock.Value);
-
-        if (queryParams.MaxStock.HasValue)
-            query = query.Where(product => product.Stock <= queryParams.MaxStock.Value);
-
-        if (queryParams.MinReservedStock.HasValue)
-            query = query.Where(product => product.ReservedStock >= queryParams.MinReservedStock.Value);
-
-        if (queryParams.MaxReservedStock.HasValue)
-            query = query.Where(product => product.ReservedStock <= queryParams.MaxReservedStock.Value);
-
-        if (queryParams.MinPrice.HasValue)
-            query = query.Where(product =>
-                (product.HasDiscount && product.DiscountPrice.HasValue
-                    ? product.DiscountPrice.Value
-                    : product.Price) >= queryParams.MinPrice.Value);
-
-        if (queryParams.MaxPrice.HasValue)
-            query = query.Where(product =>
-                (product.HasDiscount && product.DiscountPrice.HasValue
-                    ? product.DiscountPrice.Value
-                    : product.Price) <= queryParams.MaxPrice.Value);
+        if (queryParams.IsActive.HasValue)
+            query = query.Where(product => product.IsActive == queryParams.IsActive.Value);
 
         query = ApplySorting(query, queryParams.SortBy);
 
