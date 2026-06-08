@@ -187,6 +187,15 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
             entity.Property(order => order.TotalPrice)
                 .HasColumnType("decimal(18,2)");
 
+            entity.Property(order => order.StripePaymentIntentId)
+                .HasMaxLength(255);
+
+            entity.Property(order => order.StripeRefundId)
+                .HasMaxLength(255);
+
+            entity.Property(order => order.PreRefundStatus)
+                .HasMaxLength(40);
+
             entity.Property(order => order.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -202,11 +211,15 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
             {
                 table.HasCheckConstraint(
                     "CK_Orders_Status",
-                    $"\"Status\" IN ('{Statuses.AwaitingPayment}', '{Statuses.Paid}', '{Statuses.Preparing}', '{Statuses.Shipped}', '{Statuses.Delivered}', '{Statuses.Cancelled}', '{Statuses.Expired}')");
+                    $"\"Status\" IN ('{Statuses.AwaitingPayment}', '{Statuses.Paid}', '{Statuses.Preparing}', '{Statuses.Shipped}', '{Statuses.Delivered}', '{Statuses.Cancelled}', '{Statuses.Expired}', '{Statuses.Refunding}', '{Statuses.Refunded}')");
 
                 table.HasCheckConstraint(
                     "CK_Orders_TotalPrice",
                     "\"TotalPrice\" >= 0");
+
+                table.HasCheckConstraint(
+                    "CK_Orders_PreRefundStatus",
+                    $"\"PreRefundStatus\" IS NULL OR \"PreRefundStatus\" IN ('{Statuses.Paid}', '{Statuses.Preparing}')");
 
                 table.HasCheckConstraint(
                     "CK_Orders_ReservationExpiresAt",

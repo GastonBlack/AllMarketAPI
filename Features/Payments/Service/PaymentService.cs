@@ -99,6 +99,17 @@ public class PaymentService : IPaymentService
         throw new BadRequestException("Stripe session does not include a valid order id.");
     }
 
+    private static int GetOrderIdFromRefund(Refund refund)
+    {
+        if (refund.Metadata.TryGetValue("orderId", out var orderIdValue) &&
+            int.TryParse(orderIdValue, out var orderId))
+        {
+            return orderId;
+        }
+
+        throw new BadRequestException("Stripe refund does not include a valid order id.");
+    }
+
     // //////////////////////////////////////////
     // Modifiers
     // //////////////////////////////////////////
@@ -161,17 +172,95 @@ public class PaymentService : IPaymentService
     {
         var stripeEvent = BuildStripeEvent(json, signatureHeader);
 
-        if (stripeEvent.Type != "checkout.session.completed") return;
+        if (stripeEvent.Type == "checkout.session.completed")
+        {
+            if (stripeEvent.Data.Object is not Session session)
+                throw new BadRequestException("Invalid Stripe checkout session event.");
 
-        if (stripeEvent.Data.Object is not Session session)
-            throw new BadRequestException("Invalid Stripe checkout session event.");
+            var orderId = GetOrderIdFromSession(session);
+            await MarkOrderAsPaidAsync(orderId, session.PaymentIntentId);
+            return;
+        }
 
-        var orderId = GetOrderIdFromSession(session);
-        await MarkOrderAsPaidAsync(orderId);
+        if (stripeEvent.Type is "refund.created" or "refund.updated" or "refund.failed")
+        {
+            if (stripeEvent.Data.Object is not Refund refund)
+                throw new BadRequestException("Invalid Stripe refund event.");
+
+            await HandleRefundAsync(refund);
+        }
     }
 
-    private async Task MarkOrderAsPaidAsync(int orderId)
+    public async Task RefundOrderAsync(int orderId)
     {
+        if (orderId <= 0) throw new BadRequestException("Invalid order id.");
+
+        StripeConfiguration.ApiKey = GetRequiredConfiguration("Stripe:SecretKey", "STRIPE_SECRET_KEY");
+
+        await using (var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable))
+        {
+            var order = await _db.Orders
+                .FirstOrDefaultAsync(order => order.Id == orderId)
+                ?? throw new NotFoundException("Order not found.");
+
+            if (order.Status is Statuses.Refunding or Statuses.Refunded)
+            {
+                await transaction.CommitAsync();
+                return;
+            }
+
+            if (order.Status is not Statuses.Paid and not Statuses.Preparing)
+                throw new ConflictException("Only paid or preparing orders can be refunded.");
+
+            if (string.IsNullOrWhiteSpace(order.StripePaymentIntentId))
+                throw new ConflictException("This order does not have a Stripe payment reference.");
+
+            order.PreRefundStatus = order.Status;
+            order.Status = Statuses.Refunding;
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+
+        _db.ChangeTracker.Clear();
+
+        var refundOrder = await _db.Orders
+            .AsNoTracking()
+            .FirstAsync(order => order.Id == orderId);
+
+        var options = new RefundCreateOptions
+        {
+            PaymentIntent = refundOrder.StripePaymentIntentId,
+            Reason = "requested_by_customer",
+            Metadata = new Dictionary<string, string>
+            {
+                ["orderId"] = refundOrder.Id.ToString()
+            }
+        };
+        var requestOptions = new RequestOptions
+        {
+            IdempotencyKey = $"order-refund-{refundOrder.Id}"
+        };
+
+        Refund refund;
+        try
+        {
+            refund = await new RefundService().CreateAsync(options, requestOptions);
+        }
+        catch (StripeException)
+        {
+            await RestoreOrderAfterRefundFailureAsync(orderId);
+            throw new ConflictException("Stripe could not create the refund.");
+        }
+
+        await HandleRefundAsync(refund);
+    }
+
+    private async Task MarkOrderAsPaidAsync(int orderId, string? paymentIntentId)
+    {
+        if (string.IsNullOrWhiteSpace(paymentIntentId))
+            throw new BadRequestException("Stripe session does not include a payment intent.");
+
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
         var order = await _db.Orders
@@ -181,6 +270,12 @@ public class PaymentService : IPaymentService
 
         if (order.Status == Statuses.Paid)
         {
+            if (string.IsNullOrWhiteSpace(order.StripePaymentIntentId))
+            {
+                order.StripePaymentIntentId = paymentIntentId;
+                await _db.SaveChangesAsync();
+            }
+
             await transaction.CommitAsync();
             return;
         }
@@ -201,9 +296,89 @@ public class PaymentService : IPaymentService
         }
 
         order.Status = Statuses.Paid;
+        order.StripePaymentIntentId = paymentIntentId;
         order.ReservationExpiresAt = null;
 
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
+    }
+
+    private async Task HandleRefundAsync(Refund refund)
+    {
+        var orderId = GetOrderIdFromRefund(refund);
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var order = await _db.Orders
+            .Include(order => order.Items)
+            .FirstOrDefaultAsync(order => order.Id == orderId)
+            ?? throw new NotFoundException("Order not found.");
+
+        if (order.Status == Statuses.Refunded)
+        {
+            await transaction.CommitAsync();
+            return;
+        }
+
+        if (refund.Status is "failed" or "canceled")
+        {
+            if (order.Status == Statuses.Refunding && !string.IsNullOrWhiteSpace(order.PreRefundStatus))
+            {
+                order.Status = order.PreRefundStatus;
+                order.PreRefundStatus = null;
+                await _db.SaveChangesAsync();
+            }
+
+            await transaction.CommitAsync();
+            return;
+        }
+
+        if (order.Status is not Statuses.Paid and not Statuses.Preparing and not Statuses.Refunding)
+            throw new ConflictException("Order cannot be refunded in its current status.");
+
+        order.PreRefundStatus ??= order.Status;
+        order.StripeRefundId = refund.Id;
+
+        if (refund.Status != "succeeded")
+        {
+            order.Status = Statuses.Refunding;
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return;
+        }
+
+        foreach (var item in order.Items)
+        {
+            var updatedRows = await _db.Products
+                .Where(product => product.Id == item.ProductId && product.TotalSold >= item.Quantity)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(product => product.Stock, product => product.Stock + item.Quantity)
+                    .SetProperty(product => product.TotalSold, product => product.TotalSold - item.Quantity));
+
+            if (updatedRows != 1) throw new ConflictException("Product stock could not be restored.");
+        }
+
+        order.Status = Statuses.Refunded;
+        order.PreRefundStatus = null;
+        order.RefundedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
+    }
+
+    private async Task RestoreOrderAfterRefundFailureAsync(int orderId)
+    {
+        _db.ChangeTracker.Clear();
+
+        var order = await _db.Orders
+            .FirstOrDefaultAsync(order => order.Id == orderId)
+            ?? throw new NotFoundException("Order not found.");
+
+        if (order.Status != Statuses.Refunding || string.IsNullOrWhiteSpace(order.PreRefundStatus))
+            return;
+
+        order.Status = order.PreRefundStatus;
+        order.PreRefundStatus = null;
+        await _db.SaveChangesAsync();
     }
 }

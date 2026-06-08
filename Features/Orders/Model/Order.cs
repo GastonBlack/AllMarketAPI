@@ -17,6 +17,10 @@ public class Order
 
     public string Status { get; set; } = Statuses.AwaitingPayment;
     public decimal TotalPrice { get; set; }
+    public string? StripePaymentIntentId { get; set; }
+    public string? StripeRefundId { get; set; }
+    public string? PreRefundStatus { get; set; }
+    public DateTime? RefundedAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ReservationExpiresAt { get; set; } = DateTime.UtcNow.AddMinutes(15); // If the order expires, the ReservedStock will be released.

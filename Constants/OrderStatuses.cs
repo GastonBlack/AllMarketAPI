@@ -9,4 +9,6 @@ public static class Statuses
     public const string Delivered = "Delivered";
     public const string Cancelled = "Cancelled";
     public const string Expired = "Expired";
+    public const string Refunding = "Refunding";
+    public const string Refunded = "Refunded";
 }
