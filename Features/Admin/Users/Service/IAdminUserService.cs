@@ -8,4 +8,6 @@ public interface IAdminUserService
     Task<PaginatedResponse<AdminUserResponseDto>> GetUsersAsync(AdminUserQueryParams queryParams);
     Task<AdminUserDetailResponseDto> GetUserByIdAsync(int userId, int currentAdminUserId);
     Task<AdminUserDetailResponseDto> UpdateUserStatusAsync(int userId, AdminUpdateUserStatusDto dto, int currentAdminUserId);
+    Task<AdminUserDetailResponseDto> DisableUserAsync(int userId, int currentAdminUserId);
+    Task<AdminUserDetailResponseDto> EnableUserAsync(int userId, int currentAdminUserId);
 }

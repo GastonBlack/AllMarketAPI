@@ -10,6 +10,7 @@ public class AdminOrderDetailResponseDto
     public DateTime? ReservationExpiresAt { get; set; }
     public required string Status { get; set; }
     public bool CanChangeStatus { get; set; }
+    public bool CanRefund { get; set; }
     public decimal TotalPrice { get; set; }
     public required List<AdminOrderItemResponseDto> Items { get; set; }
 }

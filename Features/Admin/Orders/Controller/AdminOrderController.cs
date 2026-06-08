@@ -1,6 +1,7 @@
 using AllMarket.Constants.UserRoles;
 using AllMarket.Features.Admin.Orders.Dto;
 using AllMarket.Features.Admin.Orders.Services;
+using AllMarket.Features.Payments.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,9 +16,11 @@ public class AdminOrderController : ControllerBase
     // Inyections
     // //////////////////////////////////////////
     private readonly IAdminOrderService _service;
-    public AdminOrderController(IAdminOrderService service)
+    private readonly IPaymentService _paymentService;
+    public AdminOrderController(IAdminOrderService service, IPaymentService paymentService)
     {
         _service = service;
+        _paymentService = paymentService;
     }
 
     // //////////////////////////////////////////
@@ -42,5 +45,12 @@ public class AdminOrderController : ControllerBase
     public async Task<IActionResult> UpdateOrderStatusAsync(int orderId, [FromBody] AdminUpdateOrderStatusDto dto)
     {
         return Ok(await _service.UpdateOrderStatusAsync(orderId, dto));
+    }
+
+    [HttpPost("{orderId:int}/refund")]
+    public async Task<IActionResult> RefundOrderAsync(int orderId)
+    {
+        await _paymentService.RefundOrderAsync(orderId);
+        return Ok(await _service.GetOrderByIdAsync(orderId));
     }
 }
