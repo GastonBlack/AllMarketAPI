@@ -5,6 +5,7 @@ using AllMarket.Features.OrderItems.Models;
 using AllMarket.Features.Orders.Dto;
 using AllMarket.Features.Orders.Models;
 using AllMarket.Features.Products.Models;
+using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Exceptions;
 using Microsoft.EntityFrameworkCore;
@@ -17,9 +18,11 @@ public class OrderService : IOrderService
     // Inyections
     // //////////////////////////////////////////
     private readonly AllMarketDbContext _db;
-    public OrderService(AllMarketDbContext db)
+    private readonly ICacheService _cache;
+    public OrderService(AllMarketDbContext db, ICacheService cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     // //////////////////////////////////////////
@@ -156,6 +159,7 @@ public class OrderService : IOrderService
         await _db.Orders.AddAsync(order);
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
+        await _cache.InvalidateProductsAsync();
 
         return MapToOrderResponseDto(order, productsById);
     }

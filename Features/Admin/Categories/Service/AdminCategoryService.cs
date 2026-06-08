@@ -1,6 +1,7 @@
 using AllMarket.Features.Admin.Categories.Dto;
 using AllMarket.Features.Categories.Models;
 using AllMarket.Helpers.Formatting;
+using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Exceptions;
 using AllMarket.Infrastructure.Responses;
@@ -14,9 +15,11 @@ public class AdminCategoryService : IAdminCategoryService
     // Inyections
     // //////////////////////////////////////////
     private readonly AllMarketDbContext _db;
-    public AdminCategoryService(AllMarketDbContext db)
+    private readonly ICacheService _cache;
+    public AdminCategoryService(AllMarketDbContext db, ICacheService cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     // //////////////////////////////////////////
@@ -129,6 +132,7 @@ public class AdminCategoryService : IAdminCategoryService
 
         await _db.Categories.AddAsync(category);
         await _db.SaveChangesAsync();
+        await _cache.RemoveAsync(CacheKeys.Categories);
 
         return await MapToDtoAsync(category);
     }
@@ -146,6 +150,9 @@ public class AdminCategoryService : IAdminCategoryService
 
         category.Name = normalizedName;
         await _db.SaveChangesAsync();
+        await Task.WhenAll(
+            _cache.RemoveAsync(CacheKeys.Categories),
+            _cache.InvalidateProductsAsync());
 
         return await MapToDtoAsync(category);
     }
@@ -164,6 +171,7 @@ public class AdminCategoryService : IAdminCategoryService
 
         _db.Categories.Remove(category);
         await _db.SaveChangesAsync();
+        await _cache.RemoveAsync(CacheKeys.Categories);
 
         return true;
     }

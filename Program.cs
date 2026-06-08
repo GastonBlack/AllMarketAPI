@@ -10,6 +10,7 @@ using AllMarket.Features.Orders.Services;
 using AllMarket.Features.Payments.Services;
 using AllMarket.Features.Products.Services;
 using AllMarket.Features.Users.Services;
+using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Data.Seed;
 using AllMarket.Infrastructure.Middleware;
@@ -25,6 +26,14 @@ const string FrontendCorsPolicy = "FrontendCorsPolicy";
 // //////////////////////////////////////////
 builder.Services.AddDbContext<AllMarketDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis")
+        ?? "localhost:6379";
+    options.InstanceName = "AllMarket:";
+});
+builder.Services.AddScoped<ICacheService, RedisCacheService>();
 
 // //////////////////////////////////////////
 // Feature Services

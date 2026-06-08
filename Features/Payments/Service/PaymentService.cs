@@ -2,6 +2,7 @@ using System.Data;
 using AllMarket.Constants.OrderStatuses;
 using AllMarket.Features.Orders.Models;
 using AllMarket.Features.Payments.Dto;
+using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Exceptions;
 using Microsoft.EntityFrameworkCore;
@@ -17,10 +18,15 @@ public class PaymentService : IPaymentService
     // //////////////////////////////////////////
     private readonly AllMarketDbContext _db;
     private readonly IConfiguration _configuration;
-    public PaymentService(AllMarketDbContext db, IConfiguration configuration)
+    private readonly ICacheService _cache;
+    public PaymentService(
+        AllMarketDbContext db,
+        IConfiguration configuration,
+        ICacheService cache)
     {
         _db = db;
         _configuration = configuration;
+        _cache = cache;
     }
 
     // //////////////////////////////////////////
@@ -301,6 +307,7 @@ public class PaymentService : IPaymentService
 
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
+        await _cache.InvalidateProductsAsync();
     }
 
     private async Task HandleRefundAsync(Refund refund)
@@ -364,6 +371,7 @@ public class PaymentService : IPaymentService
 
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
+        await _cache.InvalidateProductsAsync();
     }
 
     private async Task RestoreOrderAfterRefundFailureAsync(int orderId)

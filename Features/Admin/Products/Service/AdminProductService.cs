@@ -1,5 +1,6 @@
 using AllMarket.Features.Admin.Products.Dto;
 using AllMarket.Features.Products.Models;
+using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Exceptions;
 using AllMarket.Infrastructure.Responses;
@@ -13,9 +14,11 @@ public class AdminProductService : IAdminProductService
     // Inyections
     // //////////////////////////////////////////
     private readonly AllMarketDbContext _db;
-    public AdminProductService(AllMarketDbContext db)
+    private readonly ICacheService _cache;
+    public AdminProductService(AllMarketDbContext db, ICacheService cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     // //////////////////////////////////////////
@@ -194,6 +197,7 @@ public class AdminProductService : IAdminProductService
 
         await _db.Products.AddAsync(product);
         await _db.SaveChangesAsync();
+        await _cache.InvalidateProductsAsync();
 
         return await GetProductByIdAsync(product.Id);
     }
@@ -227,6 +231,7 @@ public class AdminProductService : IAdminProductService
         product.CategoryId = dto.CategoryId;
 
         await _db.SaveChangesAsync();
+        await _cache.InvalidateProductsAsync();
 
         return await GetProductByIdAsync(product.Id);
     }
@@ -245,6 +250,7 @@ public class AdminProductService : IAdminProductService
 
         _db.Products.Remove(product);
         await _db.SaveChangesAsync();
+        await _cache.InvalidateProductsAsync();
 
         return true;
     }

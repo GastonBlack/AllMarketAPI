@@ -2,6 +2,7 @@ using System.Data;
 using AllMarket.Constants.OrderStatuses;
 using AllMarket.Features.Admin.Orders.Dto;
 using AllMarket.Features.Orders.Models;
+using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Exceptions;
 using AllMarket.Infrastructure.Responses;
@@ -15,9 +16,11 @@ public class AdminOrderService : IAdminOrderService
     // Inyections
     // //////////////////////////////////////////
     private readonly AllMarketDbContext _db;
-    public AdminOrderService(AllMarketDbContext db)
+    private readonly ICacheService _cache;
+    public AdminOrderService(AllMarketDbContext db, ICacheService cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     // //////////////////////////////////////////
@@ -214,6 +217,10 @@ public class AdminOrderService : IAdminOrderService
             return await GetOrderByIdAsync(order.Id);
         }
 
+        var productsChanged =
+            order.Status == Statuses.AwaitingPayment &&
+            nextStatus is Statuses.Paid or Statuses.Cancelled or Statuses.Expired;
+
         foreach (var item in order.Items)
         {
             if (order.Status == Statuses.AwaitingPayment && nextStatus == Statuses.Paid)
@@ -245,6 +252,9 @@ public class AdminOrderService : IAdminOrderService
 
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
+
+        if (productsChanged)
+            await _cache.InvalidateProductsAsync();
 
         return await GetOrderByIdAsync(order.Id);
     }
