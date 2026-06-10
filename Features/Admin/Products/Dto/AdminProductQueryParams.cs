@@ -8,7 +8,7 @@ public class AdminProductQueryParams
 
     public string? Search { get; set; }
     public int? CategoryId { get; set; }
-    public bool IncludeDisabled { get; set; } = false;
+    public string Status { get; set; } = "active";
     public int? MinStock { get; set; }
     public int? MaxStock { get; set; }
     public int? MinReservedStock { get; set; }

@@ -39,15 +39,26 @@ public class AdminProductController : ControllerBase
     // Modifiers
     // //////////////////////////////////////////
     [HttpPost]
-    public async Task<IActionResult> CreateProductAsync([FromBody] AdminCreateProductDto dto)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> CreateProductAsync(
+        [FromForm] AdminCreateProductDto dto,
+        IFormFile? image)
     {
-        return Ok(await _service.CreateProductAsync(dto));
+        return Ok(await _service.CreateProductAsync(dto, image));
     }
 
     [HttpPut("{productId:int}")]
     public async Task<IActionResult> UpdateProductAsync(int productId, [FromBody] AdminUpdateProductDto dto)
     {
         return Ok(await _service.UpdateProductAsync(productId, dto));
+    }
+
+    [HttpPut("{productId:int}/status")]
+    public async Task<IActionResult> UpdateProductStatusAsync(
+        int productId,
+        [FromBody] AdminUpdateProductStatusDto dto)
+    {
+        return Ok(await _service.UpdateProductStatusAsync(productId, dto));
     }
 
     [HttpDelete("{productId:int}")]

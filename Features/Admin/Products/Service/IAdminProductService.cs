@@ -7,7 +7,12 @@ public interface IAdminProductService
 {
     Task<PaginatedResponse<AdminProductResponseDto>> GetProductsAsync(AdminProductQueryParams queryParams);
     Task<AdminProductResponseDto> GetProductByIdAsync(int productId);
-    Task<AdminProductResponseDto> CreateProductAsync(AdminCreateProductDto dto);
+    Task<AdminProductResponseDto> CreateProductAsync(
+        AdminCreateProductDto dto,
+        IFormFile? image);
     Task<AdminProductResponseDto> UpdateProductAsync(int productId, AdminUpdateProductDto dto);
+    Task<AdminProductResponseDto> UpdateProductStatusAsync(
+        int productId,
+        AdminUpdateProductStatusDto dto);
     Task<bool> DeleteProductAsync(int productId);
 }

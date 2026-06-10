@@ -21,7 +21,6 @@ public class AdminCreateProductDto
     public bool HasDiscount { get; set; }
     public decimal? DiscountPrice { get; set; }
     public bool IsActive { get; set; } = true;
-    public string? ImageUrl { get; set; }
 
     [Range(1, int.MaxValue)]
     public int CategoryId { get; set; }

@@ -3,6 +3,7 @@ using AllMarket.Features.Products.Models;
 using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Exceptions;
+using AllMarket.Infrastructure.Images;
 using AllMarket.Infrastructure.Responses;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,10 +16,15 @@ public class AdminProductService : IAdminProductService
     // //////////////////////////////////////////
     private readonly AllMarketDbContext _db;
     private readonly ICacheService _cache;
-    public AdminProductService(AllMarketDbContext db, ICacheService cache)
+    private readonly IImageStorageService _imageStorage;
+    public AdminProductService(
+        AllMarketDbContext db,
+        ICacheService cache,
+        IImageStorageService imageStorage)
     {
         _db = db;
         _cache = cache;
+        _imageStorage = imageStorage;
     }
 
     // //////////////////////////////////////////
@@ -103,8 +109,13 @@ public class AdminProductService : IAdminProductService
             .Include(product => product.Category)
             .AsQueryable();
 
-        if (!queryParams.IncludeDisabled)
-            query = query.Where(product => product.IsActive);
+        query = queryParams.Status.Trim().ToLowerInvariant() switch
+        {
+            "active" => query.Where(product => product.IsActive),
+            "disabled" => query.Where(product => !product.IsActive),
+            "all" => query,
+            _ => throw new BadRequestException("Invalid product status value.")
+        };
 
         var search = queryParams.Search?.Trim().ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(search))
@@ -169,7 +180,9 @@ public class AdminProductService : IAdminProductService
     // //////////////////////////////////////////
     // Modifiers
     // //////////////////////////////////////////
-    public async Task<AdminProductResponseDto> CreateProductAsync(AdminCreateProductDto dto)
+    public async Task<AdminProductResponseDto> CreateProductAsync(
+        AdminCreateProductDto dto,
+        IFormFile? image)
     {
         if (dto == null) throw new BadRequestException("Invalid data.");
         ValidateDiscount(dto.HasDiscount, dto.Price, dto.DiscountPrice);
@@ -179,6 +192,10 @@ public class AdminProductService : IAdminProductService
             .AnyAsync(category => category.Id == dto.CategoryId);
 
         if (!categoryExists) throw new NotFoundException("Category not found.");
+
+        var imageUrl = image == null
+            ? null
+            : await _imageStorage.UploadProductImageAsync(image);
 
         var product = new Product
         {
@@ -190,7 +207,7 @@ public class AdminProductService : IAdminProductService
             HasDiscount = dto.HasDiscount,
             DiscountPrice = dto.HasDiscount ? dto.DiscountPrice : null,
             IsActive = dto.IsActive,
-            ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim(),
+            ImageUrl = imageUrl,
             CategoryId = dto.CategoryId,
             Category = null!
         };
@@ -230,6 +247,20 @@ public class AdminProductService : IAdminProductService
         product.ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
         product.CategoryId = dto.CategoryId;
 
+        await _db.SaveChangesAsync();
+        await _cache.InvalidateProductsAsync();
+
+        return await GetProductByIdAsync(product.Id);
+    }
+
+    public async Task<AdminProductResponseDto> UpdateProductStatusAsync(
+        int productId,
+        AdminUpdateProductStatusDto dto)
+    {
+        var product = await _db.Products.FindAsync(productId)
+            ?? throw new NotFoundException("Product not found.");
+
+        product.IsActive = dto.IsActive;
         await _db.SaveChangesAsync();
         await _cache.InvalidateProductsAsync();
 

@@ -13,6 +13,7 @@ using AllMarket.Features.Users.Services;
 using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Data.Seed;
+using AllMarket.Infrastructure.Images;
 using AllMarket.Infrastructure.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +50,7 @@ builder.Services.AddScoped<IAdminProductService, AdminProductService>();
 builder.Services.AddScoped<IAdminCategoryService, AdminCategoryService>();
 builder.Services.AddScoped<IAdminOrderService, AdminOrderService>();
 builder.Services.AddScoped<IAdminUserService, AdminUserService>();
+builder.Services.AddHttpClient<IImageStorageService, CloudinaryImageStorageService>();
 
 // //////////////////////////////////////////
 // Authentication
