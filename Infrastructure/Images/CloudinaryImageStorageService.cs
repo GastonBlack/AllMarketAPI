@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -23,7 +22,7 @@ public class CloudinaryImageStorageService : IImageStorageService
         _configuration = configuration;
     }
 
-    // Validation and Cloudinary request signing
+    // Validation and Cloudinary credentials
     private (string CloudName, string ApiKey, string ApiSecret) GetCredentials()
     {
         var cloudinaryUrl = _configuration["CLOUDINARY_URL"];
@@ -55,17 +54,6 @@ public class CloudinaryImageStorageService : IImageStorageService
             throw new BadRequestException("The selected file must be an image.");
     }
 
-    private static string CreateSignature(
-        long timestamp,
-        string folder,
-        string apiSecret)
-    {
-        var value = $"folder={folder}&timestamp={timestamp}{apiSecret}";
-        var hash = SHA1.HashData(Encoding.UTF8.GetBytes(value));
-
-        return Convert.ToHexStringLower(hash);
-    }
-
     // Upload
     public async Task<string> UploadProductImageAsync(IFormFile image)
     {
@@ -73,8 +61,6 @@ public class CloudinaryImageStorageService : IImageStorageService
 
         var (cloudName, apiKey, apiSecret) = GetCredentials();
         const string folder = "allmarket/products";
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var signature = CreateSignature(timestamp, folder, apiSecret);
 
         using var content = new MultipartFormDataContent();
         await using var imageStream = image.OpenReadStream();
@@ -82,15 +68,20 @@ public class CloudinaryImageStorageService : IImageStorageService
 
         imageContent.Headers.ContentType =
             MediaTypeHeaderValue.Parse(image.ContentType);
-        content.Add(new StringContent(apiKey), "api_key");
-        content.Add(new StringContent(timestamp.ToString()), "timestamp");
-        content.Add(new StringContent(signature), "signature");
         content.Add(new StringContent(folder), "folder");
         content.Add(imageContent, "file", Path.GetFileName(image.FileName));
 
-        using var response = await _httpClient.PostAsync(
-            $"https://api.cloudinary.com/v1_1/{cloudName}/image/upload",
-            content);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"https://api.cloudinary.com/v1_1/{cloudName}/image/upload")
+        {
+            Content = content
+        };
+        var credentials = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{apiKey}:{apiSecret}"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+
+        using var response = await _httpClient.SendAsync(request);
 
         if (!response.IsSuccessStatusCode)
         {
