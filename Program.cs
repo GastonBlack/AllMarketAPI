@@ -13,6 +13,7 @@ using AllMarket.Features.Orders.Services;
 using AllMarket.Features.Payments.Services;
 using AllMarket.Features.Products.Services;
 using AllMarket.Features.Users.Services;
+using AllMarket.Infrastructure.BackgroundServices;
 using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Data.Seed;
@@ -20,7 +21,6 @@ using AllMarket.Infrastructure.Images;
 using AllMarket.Infrastructure.Middleware;
 using AllMarket.Infrastructure.Responses;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -67,6 +67,7 @@ builder.Services.AddScoped<IAdminCategoryService, AdminCategoryService>();
 builder.Services.AddScoped<IAdminOrderService, AdminOrderService>();
 builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 builder.Services.AddHttpClient<IImageStorageService, CloudinaryImageStorageService>();
+builder.Services.AddHostedService<OrderExpirationBackgroundService>();
 
 // //////////////////////////////////////////
 // Authentication
