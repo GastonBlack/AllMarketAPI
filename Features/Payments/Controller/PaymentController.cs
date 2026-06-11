@@ -1,7 +1,9 @@
+using AllMarket.Constants.RateLimitPolicyNames;
 using AllMarket.Features.Payments.Services;
 using AllMarket.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AllMarket.Features.Payments.Controllers;
 
@@ -23,6 +25,7 @@ public class PaymentController : ControllerBase
     // //////////////////////////////////////////
     [Authorize]
     [HttpPost("checkout/{orderId}")]
+    [EnableRateLimiting(RateLimitPolicies.PaymentCheckout)]
     public async Task<IActionResult> CreateCheckoutSessionAsync([FromRoute] int orderId)
     {
         int userId = User.GetAuthenticatedUserId();

@@ -1,7 +1,9 @@
+using AllMarket.Constants.RateLimitPolicyNames;
 using AllMarket.Features.Auth.Dto;
 using AllMarket.Features.Auth.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AllMarket.Features.Auth.Controllers;
 
@@ -41,12 +43,14 @@ public class AuthController : ControllerBase
     // Modifiers
     // //////////////////////////////////////////
     [HttpPost("register")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> RegisterAsync([FromBody] RegisterDto dto)
     {
         return Ok(await _service.RegisterAsync(dto));
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> LoginAsync([FromBody] LoginDto dto)
     {
         var result = await _service.LoginAsync(dto);

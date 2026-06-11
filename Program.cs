@@ -1,4 +1,7 @@
+using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
+using AllMarket.Constants.RateLimitPolicyNames;
 using AllMarket.Features.Admin.Categories.Services;
 using AllMarket.Features.Admin.Orders.Services;
 using AllMarket.Features.Admin.Products.Services;
@@ -16,11 +19,23 @@ using AllMarket.Infrastructure.Data.Seed;
 using AllMarket.Infrastructure.Images;
 using AllMarket.Infrastructure.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 const string FrontendCorsPolicy = "FrontendCorsPolicy";
+
+static string GetClientIp(HttpContext httpContext)
+{
+    return $"ip:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+}
+
+static string GetUserOrIp(HttpContext httpContext)
+{
+    var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    return userId == null ? GetClientIp(httpContext) : $"user:{userId}";
+}
 
 // //////////////////////////////////////////
 // Database
@@ -117,6 +132,108 @@ builder.Services.AddCors(options =>
 });
 
 // //////////////////////////////////////////
+// Rate Limiting
+// //////////////////////////////////////////
+builder.Services.AddRateLimiter(options =>
+{
+
+    // //////////////////////////////////////////
+    // Global: 100 per minute.
+    // Auth: 5 per minute.
+    // Profile update: 10 per minute.
+    // Password change: 5 per 15 minutes.
+    // Order creation: 10 per minute.
+    // Payment checkout: 5 per minute.
+    // Refund: 3 per minute.
+    // Product creation: 10 per minute.
+    // //////////////////////////////////////////
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: GetClientIp(httpContext),
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                QueueLimit = 0
+            }));
+
+    // --------------------------------
+    // Individual endpoint policies.
+    // --------------------------------
+    options.AddPolicy<string>(RateLimitPolicies.Auth, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientIp(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy<string>(RateLimitPolicies.ProfileUpdate, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetUserOrIp(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy<string>(RateLimitPolicies.PasswordChange, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetUserOrIp(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(15),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy<string>(RateLimitPolicies.OrderCreation, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetUserOrIp(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy<string>(RateLimitPolicies.PaymentCheckout, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetUserOrIp(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy<string>(RateLimitPolicies.Refund, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetUserOrIp(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 3,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy<string>(RateLimitPolicies.ProductCreation, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetUserOrIp(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
+
+// //////////////////////////////////////////
 // API Services
 // //////////////////////////////////////////
 builder.Services.AddControllers();
@@ -139,8 +256,10 @@ if (app.Environment.IsDevelopment())
 // //////////////////////////////////////////
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
+app.UseRouting();
 app.UseCors(FrontendCorsPolicy);
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 // //////////////////////////////////////////

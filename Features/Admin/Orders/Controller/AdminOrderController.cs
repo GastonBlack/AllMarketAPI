@@ -1,9 +1,11 @@
+using AllMarket.Constants.RateLimitPolicyNames;
 using AllMarket.Constants.UserRoles;
 using AllMarket.Features.Admin.Orders.Dto;
 using AllMarket.Features.Admin.Orders.Services;
 using AllMarket.Features.Payments.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AllMarket.Features.Admin.Orders.Controllers;
 
@@ -48,6 +50,7 @@ public class AdminOrderController : ControllerBase
     }
 
     [HttpPost("{orderId:int}/refund")]
+    [EnableRateLimiting(RateLimitPolicies.Refund)]
     public async Task<IActionResult> RefundOrderAsync(int orderId)
     {
         await _paymentService.RefundOrderAsync(orderId);

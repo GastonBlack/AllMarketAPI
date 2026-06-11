@@ -1,8 +1,10 @@
+using AllMarket.Constants.RateLimitPolicyNames;
 using AllMarket.Features.Users.Dto;
 using AllMarket.Features.Users.Services;
 using AllMarket.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AllMarket.Features.Users.Controllers;
 
@@ -42,6 +44,7 @@ public class UserController : ControllerBase
     // Modifiers
     // //////////////////////////////////////////
     [HttpPatch("update")]
+    [EnableRateLimiting(RateLimitPolicies.ProfileUpdate)]
     public async Task<IActionResult> UpdateUserInfoAsync([FromBody] UpdateUserProfileDto dto)
     {
         int userId = User.GetAuthenticatedUserId();
@@ -49,6 +52,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPut("me/password")]
+    [EnableRateLimiting(RateLimitPolicies.PasswordChange)]
     public async Task<IActionResult> ChangePasswordAsync([FromBody] ChangePasswordDto dto)
     {
         int userId = User.GetAuthenticatedUserId();

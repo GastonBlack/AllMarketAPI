@@ -1,8 +1,10 @@
+using AllMarket.Constants.RateLimitPolicyNames;
 using AllMarket.Constants.UserRoles;
 using AllMarket.Features.Admin.Products.Dto;
 using AllMarket.Features.Admin.Products.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AllMarket.Features.Admin.Products.Controllers;
 
@@ -40,6 +42,7 @@ public class AdminProductController : ControllerBase
     // //////////////////////////////////////////
     [HttpPost]
     [Consumes("multipart/form-data")]
+    [EnableRateLimiting(RateLimitPolicies.ProductCreation)]
     public async Task<IActionResult> CreateProductAsync(
         [FromForm] AdminCreateProductDto dto,
         IFormFile? image)
