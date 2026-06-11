@@ -18,6 +18,7 @@ using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Data.Seed;
 using AllMarket.Infrastructure.Images;
 using AllMarket.Infrastructure.Middleware;
+using AllMarket.Infrastructure.Responses;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -148,6 +149,20 @@ builder.Services.AddRateLimiter(options =>
     // Product creation: 10 per minute.
     // //////////////////////////////////////////
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var response = new ErrorResponse
+        {
+            Error = "rate_limit_exceeded",
+            Message = "Too many requests. Please try again later.",
+            StatusCode = StatusCodes.Status429TooManyRequests,
+            TraceId = context.HttpContext.TraceIdentifier
+        };
+
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        await context.HttpContext.Response.WriteAsJsonAsync(response, cancellationToken);
+    };
+
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
         RateLimitPartition.GetSlidingWindowLimiter(
             partitionKey: GetClientIp(httpContext),
