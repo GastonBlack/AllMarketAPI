@@ -163,6 +163,14 @@ public class AdminUserService : IAdminUserService
         user.IsActive = isActive;
         user.DisabledAt = isActive ? null : DateTime.UtcNow;
 
+        if (!isActive)
+        {
+            await _db.RefreshTokens
+                .Where(token => token.UserId == userId && token.RevokedAt == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(token => token.RevokedAt, DateTime.UtcNow));
+        }
+
         await _db.SaveChangesAsync();
 
         return MapToDetailDto(user, currentAdminUserId);

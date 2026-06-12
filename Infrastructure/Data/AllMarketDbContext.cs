@@ -1,5 +1,6 @@
 using AllMarket.Constants.OrderStatuses;
 using AllMarket.Constants.UserRoles;
+using AllMarket.Features.Auth.Models;
 using AllMarket.Features.Categories.Models;
 using AllMarket.Features.OrderItems.Models;
 using AllMarket.Features.Orders.Models;
@@ -16,6 +17,7 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +28,7 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
         ConfigureProducts(modelBuilder);
         ConfigureOrders(modelBuilder);
         ConfigureOrderItems(modelBuilder);
+        ConfigureRefreshTokens(modelBuilder);
     }
 
     private static void ConfigureUsers(ModelBuilder modelBuilder)
@@ -258,6 +261,31 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
                     "CK_OrderItems_PriceAtPurchase",
                     "\"PriceAtPurchase\" > 0");
             });
+        });
+    }
+
+    private static void ConfigureRefreshTokens(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasKey(token => token.Id);
+
+            entity.Property(token => token.TokenHash)
+                .IsRequired()
+                .HasMaxLength(64);
+
+            entity.HasIndex(token => token.TokenHash)
+                .IsUnique();
+
+            entity.HasIndex(token => token.FamilyId);
+
+            entity.Property(token => token.ReplacedByTokenHash)
+                .HasMaxLength(64);
+
+            entity.HasOne(token => token.User)
+                .WithMany()
+                .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

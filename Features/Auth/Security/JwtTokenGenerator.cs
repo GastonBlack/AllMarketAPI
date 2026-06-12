@@ -14,12 +14,13 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         _configuration = configuration;
     }
 
-    public string GenerateToken(User user)
+    public JwtTokenResult GenerateToken(User user)
     {
         var secretKey = _configuration["Jwt:SecretKey"];
         var issuer = _configuration["Jwt:Issuer"];
         var audience = _configuration["Jwt:Audience"];
         var expirationMinutes = int.Parse(_configuration["Jwt:ExpirationMinutes"]!);
+        var expiresAt = DateTime.UtcNow.AddMinutes(expirationMinutes);
 
         var claims = new List<Claim>
         {
@@ -39,10 +40,12 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expirationMinutes),
+            expires: expiresAt,
             signingCredentials: credentials
         );
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return new JwtTokenResult(
+            new JwtSecurityTokenHandler().WriteToken(token),
+            expiresAt);
     }
 }

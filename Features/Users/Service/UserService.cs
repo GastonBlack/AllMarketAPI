@@ -121,6 +121,10 @@ public class UserService : IUserService
             throw new BadRequestException("Password does not match.");
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        await _db.RefreshTokens
+            .Where(token => token.UserId == userId && token.RevokedAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(token => token.RevokedAt, DateTime.UtcNow));
         await _db.SaveChangesAsync();
 
         return true;

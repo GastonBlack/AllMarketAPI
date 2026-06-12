@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using AllMarket.Features.Auth.Dto;
+using AllMarket.Features.Auth.Models;
 using AllMarket.Features.Auth.Security;
 using AllMarket.Features.Users.Models;
 using AllMarket.Helpers.Formatting;
@@ -18,10 +21,15 @@ public class AuthService : IAuthService
     // //////////////////////////////////////////
     private readonly AllMarketDbContext _db;
     private readonly IJwtTokenGenerator _token;
-    public AuthService(AllMarketDbContext db, IJwtTokenGenerator token)
+    private readonly IConfiguration _configuration;
+    public AuthService(
+        AllMarketDbContext db,
+        IJwtTokenGenerator token,
+        IConfiguration configuration)
     {
         _db = db;
         _token = token;
+        _configuration = configuration;
     }
 
     // //////////////////////////////////////////
@@ -36,6 +44,56 @@ public class AuthService : IAuthService
             Email = user.Email,
             Rol = user.Rol
         };
+    }
+
+    private int GetRefreshTokenExpirationDays()
+    {
+        if (!int.TryParse(
+                _configuration["Jwt:RefreshTokenExpirationDays"],
+                out var expirationDays) ||
+            expirationDays <= 0)
+        {
+            throw new InvalidOperationException(
+                "JWT refresh token expiration days is not configured.");
+        }
+
+        return expirationDays;
+    }
+
+    private static string GenerateRefreshToken()
+    {
+        return Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+    }
+
+    private static string HashRefreshToken(string refreshToken)
+    {
+        return Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
+    }
+
+    private AuthSessionResult CreateSessionResult(
+        User user,
+        string refreshToken,
+        DateTime refreshTokenExpiresAt)
+    {
+        var accessToken = _token.GenerateToken(user);
+
+        return new AuthSessionResult(
+            MapToAuthResponseDto(user),
+            accessToken.Token,
+            accessToken.ExpiresAt,
+            refreshToken,
+            refreshTokenExpiresAt);
+    }
+
+    private async Task RevokeTokenFamilyAsync(Guid familyId)
+    {
+        var revokedAt = DateTime.UtcNow;
+
+        await _db.RefreshTokens
+            .Where(token => token.FamilyId == familyId && token.RevokedAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(token => token.RevokedAt, revokedAt));
     }
 
     // //////////////////////////////////////////
@@ -77,7 +135,7 @@ public class AuthService : IAuthService
         return MapToAuthResponseDto(newUser);
     }
 
-    public async Task<(AuthResponseDto User, string Token)> LoginAsync(LoginDto dto)
+    public async Task<AuthSessionResult> LoginAsync(LoginDto dto)
     {
         if (dto == null) throw new BadRequestException("Invalid data.");
 
@@ -90,10 +148,106 @@ public class AuthService : IAuthService
         bool passwordMatch = BCrypt.Net.BCrypt.Verify(dto.Password, passwordHash);
 
         if (user == null || !passwordMatch) throw new BadRequestException("Email/password incorrect.");
+        if (!user.IsActive) throw new ForbiddenException("User account is disabled.");
 
-        // Generates JWT token.
-        var token = _token.GenerateToken(user);
+        var refreshToken = GenerateRefreshToken();
+        var refreshTokenExpiresAt = DateTime.UtcNow.AddDays(GetRefreshTokenExpirationDays());
 
-        return (MapToAuthResponseDto(user), token);
+        await _db.RefreshTokens.AddAsync(new RefreshToken
+        {
+            TokenHash = HashRefreshToken(refreshToken),
+            FamilyId = Guid.NewGuid(),
+            ExpiresAt = refreshTokenExpiresAt,
+            UserId = user.Id,
+            User = null!
+        });
+        await _db.SaveChangesAsync();
+
+        return CreateSessionResult(user, refreshToken, refreshTokenExpiresAt);
+    }
+
+    public async Task<AuthSessionResult> RefreshAsync(string refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            throw new UnauthorizedException("Refresh token is missing.");
+
+        var tokenHash = HashRefreshToken(refreshToken);
+        var storedToken = await _db.RefreshTokens
+            .AsNoTracking()
+            .Include(token => token.User)
+            .FirstOrDefaultAsync(token => token.TokenHash == tokenHash)
+            ?? throw new UnauthorizedException("Refresh token is invalid.");
+
+        if (storedToken.RevokedAt.HasValue)
+        {
+            await RevokeTokenFamilyAsync(storedToken.FamilyId);
+            throw new UnauthorizedException("Refresh token is no longer valid.");
+        }
+
+        if (storedToken.ExpiresAt <= DateTime.UtcNow || !storedToken.User.IsActive)
+        {
+            await RevokeTokenFamilyAsync(storedToken.FamilyId);
+            throw new UnauthorizedException("Refresh token has expired.");
+        }
+
+        var newRefreshToken = GenerateRefreshToken();
+        var newTokenHash = HashRefreshToken(newRefreshToken);
+        var newRefreshTokenExpiresAt = DateTime.UtcNow.AddDays(GetRefreshTokenExpirationDays());
+        var revokedAt = DateTime.UtcNow;
+        var rotationSucceeded = false;
+
+        await using (var transaction = await _db.Database.BeginTransactionAsync())
+        {
+            var updatedRows = await _db.RefreshTokens
+                .Where(token => token.Id == storedToken.Id && token.RevokedAt == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(token => token.RevokedAt, revokedAt)
+                    .SetProperty(token => token.ReplacedByTokenHash, newTokenHash));
+
+            if (updatedRows == 1)
+            {
+                await _db.RefreshTokens.AddAsync(new RefreshToken
+                {
+                    TokenHash = newTokenHash,
+                    FamilyId = storedToken.FamilyId,
+                    ExpiresAt = newRefreshTokenExpiresAt,
+                    UserId = storedToken.UserId,
+                    User = null!
+                });
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                rotationSucceeded = true;
+            }
+            else
+            {
+                await transaction.RollbackAsync();
+            }
+        }
+
+        if (!rotationSucceeded)
+        {
+            await RevokeTokenFamilyAsync(storedToken.FamilyId);
+            throw new UnauthorizedException("Refresh token is no longer valid.");
+        }
+
+        return CreateSessionResult(
+            storedToken.User,
+            newRefreshToken,
+            newRefreshTokenExpiresAt);
+    }
+
+    public async Task LogoutAsync(string? refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken)) return;
+
+        var tokenHash = HashRefreshToken(refreshToken);
+        var familyId = await _db.RefreshTokens
+            .AsNoTracking()
+            .Where(token => token.TokenHash == tokenHash)
+            .Select(token => (Guid?)token.FamilyId)
+            .FirstOrDefaultAsync();
+
+        if (familyId.HasValue)
+            await RevokeTokenFamilyAsync(familyId.Value);
     }
 }

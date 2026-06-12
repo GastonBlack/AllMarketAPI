@@ -4,5 +4,5 @@ namespace AllMarket.Features.Auth.Security;
 
 public interface IJwtTokenGenerator
 {
-    string GenerateToken(User user);
+    JwtTokenResult GenerateToken(User user);
 }

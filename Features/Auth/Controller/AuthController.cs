@@ -1,7 +1,6 @@
 using AllMarket.Constants.RateLimitPolicyNames;
 using AllMarket.Features.Auth.Dto;
 using AllMarket.Features.Auth.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -11,6 +10,9 @@ namespace AllMarket.Features.Auth.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
+    private const string AccessTokenCookie = "access_token";
+    private const string RefreshTokenCookie = "refresh_token";
+
     // //////////////////////////////////////////
     // Inyections
     // //////////////////////////////////////////
@@ -24,7 +26,7 @@ public class AuthController : ControllerBase
     // //////////////////////////////////////////
     // Cookies
     // //////////////////////////////////////////
-    private CookieOptions CreateAuthCookieOptions()
+    private CookieOptions CreateAuthCookieOptions(DateTime expiresAt, string path)
     {
         return new CookieOptions
         {
@@ -33,11 +35,29 @@ public class AuthController : ControllerBase
             SameSite = _environment.IsDevelopment()
                     ? SameSiteMode.Lax
                     : SameSiteMode.None,
-            Expires = DateTime.UtcNow.AddHours(1),
-            Path = "/"
+            Expires = expiresAt,
+            Path = path
         };
     }
 
+    private void SetAuthCookies(AuthSessionResult session)
+    {
+        Response.Cookies.Append(
+            AccessTokenCookie,
+            session.AccessToken,
+            CreateAuthCookieOptions(session.AccessTokenExpiresAt, "/"));
+
+        Response.Cookies.Append(
+            RefreshTokenCookie,
+            session.RefreshToken,
+            CreateAuthCookieOptions(session.RefreshTokenExpiresAt, "/api/auth"));
+    }
+
+    private void DeleteAuthCookies()
+    {
+        Response.Cookies.Delete(AccessTokenCookie, new CookieOptions { Path = "/" });
+        Response.Cookies.Delete(RefreshTokenCookie, new CookieOptions { Path = "/api/auth" });
+    }
 
     // //////////////////////////////////////////
     // Modifiers
@@ -54,24 +74,27 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> LoginAsync([FromBody] LoginDto dto)
     {
         var result = await _service.LoginAsync(dto);
-
-        Response.Cookies.Append(
-            "access_token",
-            result.Token,
-            CreateAuthCookieOptions()
-        );
+        SetAuthCookies(result);
 
         return Ok(result.User);
     }
 
-    [Authorize]
-    [HttpPost("logout")]
-    public IActionResult Logout()
+    [HttpPost("refresh")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> RefreshAsync()
     {
-        Response.Cookies.Delete("access_token", new CookieOptions
-        {
-            Path = "/"
-        });
+        var refreshToken = Request.Cookies[RefreshTokenCookie];
+        var result = await _service.RefreshAsync(refreshToken ?? string.Empty);
+        SetAuthCookies(result);
+
+        return Ok(result.User);
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> LogoutAsync()
+    {
+        await _service.LogoutAsync(Request.Cookies[RefreshTokenCookie]);
+        DeleteAuthCookies();
 
         return Ok(true);
     }
