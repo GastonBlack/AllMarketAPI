@@ -21,6 +21,7 @@ using AllMarket.Infrastructure.Images;
 using AllMarket.Infrastructure.Middleware;
 using AllMarket.Infrastructure.Responses;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -51,6 +52,15 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = "AllMarket:";
 });
 builder.Services.AddScoped<ICacheService, RedisCacheService>();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = null;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // //////////////////////////////////////////
 // Feature Services
@@ -266,10 +276,17 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     await DatabaseSeeder.SeedAsync(app.Services);
 }
+else
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AllMarketDbContext>();
+    await db.Database.MigrateAsync();
+}
 
 // //////////////////////////////////////////
 // Middleware
 // //////////////////////////////////////////
+app.UseForwardedHeaders();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseRouting();

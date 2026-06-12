@@ -1,0 +1,63 @@
+services:
+  api:
+    build: .
+    container_name: allmarket-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: ${DB_CONNECTION}
+      Jwt__SecretKey: ${JWT__SECRETKEY}
+      Jwt__Issuer: ${JWT__ISSUER}
+      Jwt__Audience: ${JWT__AUDIENCE}
+      Jwt__ExpirationMinutes: ${JWT__EXPIRATIONMINUTES}
+      Jwt__RefreshTokenExpirationDays: ${JWT__REFRESHTOKENEXPIRATIONDAYS}
+      Cors__AllowedOrigins__0: ${Cors__AllowedOrigins__0}
+      Stripe__SecretKey: ${STRIPE_SECRET_KEY}
+      Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET}
+      Frontend__Url: ${FRONTEND_URL}
+      ConnectionStrings__Redis: redis:6379
+      CLOUDINARY_URL: ${CLOUDINARY_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18
+    container_name: allmarket-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - allmarket-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: allmarket-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: allmarket-ngrok
+    restart: unless-stopped
+    command: ["http", "--url=${NGROK_DOMAIN}", "api:8080"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    depends_on:
+      - api
+
+volumes:
+  allmarket-postgres-data:
