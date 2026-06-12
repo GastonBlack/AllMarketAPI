@@ -1,6 +1,8 @@
+using System.Security.Cryptography;
 using AllMarket.Constants.RateLimitPolicyNames;
 using AllMarket.Features.Auth.Dto;
 using AllMarket.Features.Auth.Services;
+using AllMarket.Infrastructure.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -40,6 +42,19 @@ public class AuthController : ControllerBase
         };
     }
 
+    private CookieOptions CreateCsrfCookieOptions()
+    {
+        return new CookieOptions
+        {
+            HttpOnly = false,
+            Secure = !_environment.IsDevelopment(),
+            SameSite = _environment.IsDevelopment()
+                    ? SameSiteMode.Lax
+                    : SameSiteMode.None,
+            Path = "/"
+        };
+    }
+
     private void SetAuthCookies(AuthSessionResult session)
     {
         Response.Cookies.Append(
@@ -57,6 +72,27 @@ public class AuthController : ControllerBase
     {
         Response.Cookies.Delete(AccessTokenCookie, new CookieOptions { Path = "/" });
         Response.Cookies.Delete(RefreshTokenCookie, new CookieOptions { Path = "/api/auth" });
+    }
+
+    // //////////////////////////////////////////
+    // Getters
+    // //////////////////////////////////////////
+    [HttpGet("csrf")]
+    public IActionResult GetCsrfToken()
+    {
+        Response.Headers.CacheControl = "no-store";
+        var csrfToken = Request.Cookies[CsrfConstants.CookieName];
+
+        if (string.IsNullOrWhiteSpace(csrfToken))
+        {
+            csrfToken = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+            Response.Cookies.Append(
+                CsrfConstants.CookieName,
+                csrfToken,
+                CreateCsrfCookieOptions());
+        }
+
+        return Ok(new { CsrfToken = csrfToken });
     }
 
     // //////////////////////////////////////////
