@@ -15,7 +15,7 @@ public class ProductServiceTests
     {
         await using var db = CreateDbContext();
         await SeedProductsAsync(db);
-        var service = new ProductServices(db);
+        var service = new ProductServices(db, new TestCacheService());
 
         var result = await service.GetAllProductsAsync(new ProductQueryParams
         {
@@ -44,7 +44,7 @@ public class ProductServiceTests
     {
         await using var db = CreateDbContext();
         await SeedProductsAsync(db);
-        var service = new ProductServices(db);
+        var service = new ProductServices(db, new TestCacheService());
 
         var result = await service.GetAllProductsAsync(new ProductQueryParams
         {
@@ -80,7 +80,7 @@ public class ProductServiceTests
         }
 
         await db.SaveChangesAsync();
-        var service = new ProductServices(db);
+        var service = new ProductServices(db, new TestCacheService());
 
         var result = await service.GetAllProductsAsync(new ProductQueryParams
         {
@@ -101,7 +101,7 @@ public class ProductServiceTests
     {
         await using var db = CreateDbContext();
         await SeedProductsAsync(db);
-        var service = new ProductServices(db);
+        var service = new ProductServices(db, new TestCacheService());
 
         await Assert.ThrowsAsync<BadRequestException>(() =>
             service.GetAllProductsAsync(new ProductQueryParams
@@ -115,7 +115,7 @@ public class ProductServiceTests
     {
         await using var db = CreateDbContext();
         await SeedProductsAsync(db);
-        var service = new ProductServices(db);
+        var service = new ProductServices(db, new TestCacheService());
 
         var result = await service.GetAllProductsAsync(new ProductQueryParams
         {
