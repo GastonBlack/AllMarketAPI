@@ -280,7 +280,13 @@ else
 {
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<AllMarketDbContext>();
+    var cache = scope.ServiceProvider.GetRequiredService<ICacheService>();
+
     await db.Database.MigrateAsync();
+    await CategorySeeder.SeedAsync(db);
+    await ProductSeeder.SeedAsync(db);
+    await cache.RemoveAsync(CacheKeys.Categories);
+    await cache.InvalidateProductsAsync();
 }
 
 // //////////////////////////////////////////

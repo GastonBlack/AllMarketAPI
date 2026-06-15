@@ -12,7 +12,11 @@ public static class CategorySeeder
             "Headphones",
             "Consoles",
             "Phones",
-            "Graphics Cards"
+            "Graphics Cards",
+            "Televisions",
+            "Laptops",
+            "Fashion",
+            "Clothing"
         };
     }
 
