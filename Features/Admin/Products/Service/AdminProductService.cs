@@ -285,4 +285,51 @@ public class AdminProductService : IAdminProductService
 
         return true;
     }
+
+    public async Task<bool> UpdateProductDiscount(int productId, AdminUpdateDiscountDto dto)
+    {
+        if (dto == null) throw new BadRequestException("Invalid data.");
+
+        var product = await _db.Products.FindAsync(productId)
+            ?? throw new NotFoundException("Product not found.");
+            
+        // Verifies if the request is to deactivate discount.
+        if (!dto.Discount)
+        {
+            product.DiscountPrice = null;
+            product.HasDiscount = false;
+
+            await _db.SaveChangesAsync();
+            await _cache.InvalidateProductsAsync();
+            return true;
+        }
+
+        if (dto.DiscountPercentage.HasValue == dto.DiscountPrice.HasValue)
+            throw new BadRequestException("Select only one option; 1. New price | 2. Percentage discount");
+
+        // Applies discount.
+        if (dto.DiscountPercentage.HasValue)
+        {
+            if (dto.DiscountPercentage <= 0 || dto.DiscountPercentage >= 100)
+                throw new BadRequestException("Discount percentage must be greater than 0 and lower than 100.");
+
+            product.DiscountPrice = Math.Round(
+                product.Price * (1 - dto.DiscountPercentage.Value / 100),
+                2,
+                MidpointRounding.AwayFromZero);
+        }
+
+        if (dto.DiscountPrice.HasValue)
+        {
+            if (dto.DiscountPrice <= 0 || dto.DiscountPrice >= product.Price)
+                throw new BadRequestException("New price must be greater than 0 and lower than the original.");
+
+            product.DiscountPrice = dto.DiscountPrice.Value;
+        }
+
+        product.HasDiscount = true;
+        await _db.SaveChangesAsync();
+        await _cache.InvalidateProductsAsync();
+        return true;
+    }
 }

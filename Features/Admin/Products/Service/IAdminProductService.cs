@@ -15,4 +15,5 @@ public interface IAdminProductService
         int productId,
         AdminUpdateProductStatusDto dto);
     Task<bool> DeleteProductAsync(int productId);
+    Task<bool> UpdateProductDiscount(int productId, AdminUpdateDiscountDto dto);
 }

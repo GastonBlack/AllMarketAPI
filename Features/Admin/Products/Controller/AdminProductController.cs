@@ -69,4 +69,10 @@ public class AdminProductController : ControllerBase
     {
         return Ok(await _service.DeleteProductAsync(productId));
     }
+
+    [HttpPatch("{productId:int}/discount")]
+    public async Task<IActionResult> UpdateProductDiscount(int productId, [FromBody] AdminUpdateDiscountDto dto)
+    {
+        return Ok(await _service.UpdateProductDiscount(productId, dto));
+    }
 }
