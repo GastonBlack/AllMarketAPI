@@ -17,6 +17,7 @@ using AllMarket.Infrastructure.BackgroundServices;
 using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
 using AllMarket.Infrastructure.Data.Seed;
+using AllMarket.Infrastructure.Emails;
 using AllMarket.Infrastructure.Images;
 using AllMarket.Infrastructure.Middleware;
 using AllMarket.Infrastructure.Responses;
@@ -77,6 +78,10 @@ builder.Services.AddScoped<IAdminCategoryService, AdminCategoryService>();
 builder.Services.AddScoped<IAdminOrderService, AdminOrderService>();
 builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 builder.Services.AddHttpClient<IImageStorageService, CloudinaryImageStorageService>();
+builder.Services.AddHttpClient<IEmailService, BrevoEmailService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.brevo.com/v3/");
+});
 builder.Services.AddHostedService<OrderExpirationBackgroundService>();
 
 // //////////////////////////////////////////

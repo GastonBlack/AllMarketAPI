@@ -17,6 +17,9 @@ services:
       Frontend__Url: ${FRONTEND_URL}
       ConnectionStrings__Redis: redis:6379
       CLOUDINARY_URL: ${CLOUDINARY_URL}
+      Brevo__ApiKey: ${BREVO_API_KEY}
+      Brevo__SenderEmail: ${BREVO_SENDER_EMAIL}
+      Brevo__SenderName: ${BREVO_SENDER_NAME}
     depends_on:
       postgres:
         condition: service_healthy

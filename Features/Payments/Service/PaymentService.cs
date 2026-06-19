@@ -1,9 +1,11 @@
 using System.Data;
+using System.Net;
 using AllMarket.Constants.OrderStatuses;
 using AllMarket.Features.Orders.Models;
 using AllMarket.Features.Payments.Dto;
 using AllMarket.Infrastructure.Caching;
 using AllMarket.Infrastructure.Data;
+using AllMarket.Infrastructure.Emails;
 using AllMarket.Infrastructure.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Stripe;
@@ -19,14 +21,20 @@ public class PaymentService : IPaymentService
     private readonly AllMarketDbContext _db;
     private readonly IConfiguration _configuration;
     private readonly ICacheService _cache;
+    private readonly IEmailService _emailService;
+    private readonly ILogger<PaymentService> _logger;
     public PaymentService(
         AllMarketDbContext db,
         IConfiguration configuration,
-        ICacheService cache)
+        ICacheService cache,
+        IEmailService emailService,
+        ILogger<PaymentService> logger)
     {
         _db = db;
         _configuration = configuration;
         _cache = cache;
+        _emailService = emailService;
+        _logger = logger;
     }
 
     // //////////////////////////////////////////
@@ -114,6 +122,60 @@ public class PaymentService : IPaymentService
         }
 
         throw new BadRequestException("Stripe refund does not include a valid order id.");
+    }
+
+    private string BuildOrderPaidEmailHtml(Order order)
+    {
+        var orderUrl = $"{GetFrontendUrl()}/orderHistory";
+        var rows = string.Join(
+            "",
+            order.Items.Select(item =>
+                $"""
+                <tr>
+                    <td style="padding:8px;border-bottom:1px solid #e5e7eb;">{WebUtility.HtmlEncode(item.Product.Name)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">{item.Quantity}</td>
+                    <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${item.PriceAtPurchase:N2}</td>
+                    <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${item.Quantity * item.PriceAtPurchase:N2}</td>
+                </tr>
+                """));
+
+        return $"""
+            <h1 style="font-family:Arial,sans-serif;">Payment confirmed</h1>
+            <p style="font-family:Arial,sans-serif;">Hi {WebUtility.HtmlEncode(order.User.FullName)}, your AllMarket order #{order.Id} was paid successfully.</p>
+            <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;">
+                <thead>
+                    <tr>
+                        <th style="padding:8px;border-bottom:1px solid #d4d4d8;text-align:left;">Product</th>
+                        <th style="padding:8px;border-bottom:1px solid #d4d4d8;text-align:center;">Qty</th>
+                        <th style="padding:8px;border-bottom:1px solid #d4d4d8;text-align:right;">Price</th>
+                        <th style="padding:8px;border-bottom:1px solid #d4d4d8;text-align:right;">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+            <p style="font-family:Arial,sans-serif;font-size:18px;"><strong>Total: ${order.TotalPrice:N2}</strong></p>
+            <p style="font-family:Arial,sans-serif;"><a href="{orderUrl}">View your order history</a></p>
+            <p style="font-family:Arial,sans-serif;color:#71717a;">This is a portfolio project, not a real store.</p>
+            """;
+    }
+
+    private async Task SendOrderPaidEmailAsync(Order order)
+    {
+        try
+        {
+            await _emailService.SendAsync(
+                order.User.Email,
+                order.User.FullName,
+                $"AllMarket order #{order.Id} confirmed",
+                BuildOrderPaidEmailHtml(order));
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Order paid email could not be sent for order {OrderId}.",
+                order.Id);
+        }
     }
 
     // //////////////////////////////////////////
@@ -270,7 +332,9 @@ public class PaymentService : IPaymentService
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
         var order = await _db.Orders
+            .Include(order => order.User)
             .Include(order => order.Items)
+                .ThenInclude(item => item.Product)
             .FirstOrDefaultAsync(order => order.Id == orderId)
             ?? throw new NotFoundException("Order not found.");
 
@@ -308,6 +372,7 @@ public class PaymentService : IPaymentService
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
         await _cache.InvalidateProductsAsync();
+        await SendOrderPaidEmailAsync(order);
     }
 
     private async Task HandleRefundAsync(Refund refund)
