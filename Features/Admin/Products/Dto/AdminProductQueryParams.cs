@@ -15,6 +15,7 @@ public class AdminProductQueryParams
     public int? MaxReservedStock { get; set; }
     public decimal? MinPrice { get; set; }
     public decimal? MaxPrice { get; set; }
+    public bool? Discount { get; set; }
     public string? SortBy { get; set; }
     public int Page { get; set; } = DefaultPage;
     public int PageSize { get; set; } = DefaultPageSize;

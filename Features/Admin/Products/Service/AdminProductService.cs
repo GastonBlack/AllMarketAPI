@@ -154,6 +154,9 @@ public class AdminProductService : IAdminProductService
                     ? product.DiscountPrice.Value
                     : product.Price) <= queryParams.MaxPrice.Value);
 
+        if (queryParams.Discount.HasValue)
+            query = query.Where(product => product.HasDiscount == queryParams.Discount.Value);
+
         query = ApplySorting(query, queryParams.SortBy);
 
         var totalItems = await query.CountAsync();
