@@ -21,3 +21,4 @@ appsettings.Development.json
 # AI Agents
 skills-lock.json
 .agents
+COMMIT_GUIDE.md
