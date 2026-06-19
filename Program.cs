@@ -274,17 +274,22 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    await DatabaseSeeder.SeedAsync(app.Services);
 }
-else
+
+// //////////////////////////////////////////
+// Database seed
+// //////////////////////////////////////////
+await using (var scope = app.Services.CreateAsyncScope())
 {
-    await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<AllMarketDbContext>();
     var cache = scope.ServiceProvider.GetRequiredService<ICacheService>();
 
     await db.Database.MigrateAsync();
+
+    await UserSeeder.SeedAsync(db);
     await CategorySeeder.SeedAsync(db);
     await ProductSeeder.SeedAsync(db);
+
     await cache.RemoveAsync(CacheKeys.Categories);
     await cache.InvalidateProductsAsync();
 }
