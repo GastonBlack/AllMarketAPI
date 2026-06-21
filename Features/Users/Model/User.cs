@@ -15,6 +15,11 @@ public class User
     public string? Phone { get; set; }
     public string Rol { get; set; } = Roles.User;
 
+    // Verification.
+    public bool EmailConfirmed { get; set; } = false;
+    public string? EmailVerificationCodeHash { get; set; }
+    public DateTime? EmailVerificationExpiresAt { get; set; }
+
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? DisabledAt { get; set; }

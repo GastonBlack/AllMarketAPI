@@ -8,4 +8,8 @@ public interface IAuthService
     public Task<AuthSessionResult> LoginAsync(LoginDto dto);
     public Task<AuthSessionResult> RefreshAsync(string refreshToken);
     public Task LogoutAsync(string? refreshToken);
+    
+    // Verification
+    public Task<bool> VerifyEmailAsync(VerifyEmailDto dto);
+    public Task<bool> ResendEmailVerificationCodeAsync(ResendEmailVerificationDto dto);
 }

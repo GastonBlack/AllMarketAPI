@@ -37,7 +37,8 @@ public static class UserSeeder
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"),
                 Address = "AllMarket Main Address",
                 Phone = "111111111",
-                Rol = Roles.Admin
+                Rol = Roles.Admin,
+                EmailConfirmed = true,
             },
             new User
             {
@@ -46,7 +47,8 @@ public static class UserSeeder
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword("User123!"),
                 Address = "742 Evergreen Avenue",
                 Phone = "222222222",
-                Rol = Roles.User
+                Rol = Roles.User,
+                EmailConfirmed = true,
             },
             new User
             {
@@ -55,7 +57,8 @@ public static class UserSeeder
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword("User123!"),
                 Address = "123 Main Street",
                 Phone = "333333333",
-                Rol = Roles.User
+                Rol = Roles.User,
+                EmailConfirmed = true,
             }
         };
     }

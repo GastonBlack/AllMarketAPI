@@ -6,6 +6,7 @@ using AllMarket.Features.Auth.Security;
 using AllMarket.Features.Users.Models;
 using AllMarket.Helpers.Formatting;
 using AllMarket.Infrastructure.Data;
+using AllMarket.Infrastructure.Emails;
 using AllMarket.Infrastructure.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +14,9 @@ namespace AllMarket.Features.Auth.Services;
 
 public class AuthService : IAuthService
 {
+    private const int EmailVerificationCodeExpirationMinutes = 15;
+    private const int EmailVerificationResendCooldownMinutes = 3;
+
     // Runs BCrypt even when the email does not exist to reduce timing leaks.
     private static readonly string DummyPasswordHash = BCrypt.Net.BCrypt.HashPassword("dummy-password");
 
@@ -22,14 +26,17 @@ public class AuthService : IAuthService
     private readonly AllMarketDbContext _db;
     private readonly IJwtTokenGenerator _token;
     private readonly IConfiguration _configuration;
+    private readonly IEmailService _emailService;
     public AuthService(
         AllMarketDbContext db,
         IJwtTokenGenerator token,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IEmailService emailService)
     {
         _db = db;
         _token = token;
         _configuration = configuration;
+        _emailService = emailService;
     }
 
     // //////////////////////////////////////////
@@ -96,8 +103,23 @@ public class AuthService : IAuthService
                 .SetProperty(token => token.RevokedAt, revokedAt));
     }
 
+    private static string GenerateVerificationCode()
+    {
+        return RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+    }
+
+    private static string EmailVerificationMessage(string verificationCode)
+    {
+        return $"""
+            <h1>Verify your account</h1>
+            <p>Use this code to verify your AllMarket account:</p>
+            <p style="font-size: 28px; font-weight: bold;">{verificationCode}</p>
+            <p>This code expires in 15 minutes.</p>
+        """;
+    }
+
     // //////////////////////////////////////////
-    // Modifiers
+    // REGISTRATION
     // //////////////////////////////////////////
     public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
     {
@@ -119,6 +141,10 @@ public class AuthService : IAuthService
         // Hashes Password
         dto.Password = BCrypt.Net.BCrypt.HashPassword(dto.Password);
 
+        // Email verification section
+        var verificationCode = GenerateVerificationCode();
+        var verificationCodeHash = BCrypt.Net.BCrypt.HashPassword(verificationCode);
+
         // Creates user.
         User newUser = new User
         {
@@ -127,14 +153,29 @@ public class AuthService : IAuthService
             Email = dto.Email,
             Address = dto.Address,
             Phone = dto.Phone,
+
+            EmailConfirmed = false,
+            EmailVerificationCodeHash = verificationCodeHash,
+            EmailVerificationExpiresAt = DateTime.UtcNow.AddMinutes(EmailVerificationCodeExpirationMinutes),
         };
 
         await _db.Users.AddAsync(newUser);
         await _db.SaveChangesAsync();
 
+        // Sends email verification email.
+        await _emailService.SendAsync(
+            newUser.Email,
+            newUser.FullName,
+            "Verify your AllMarket account",
+            EmailVerificationMessage(verificationCode)
+        );
+
         return MapToAuthResponseDto(newUser);
     }
 
+    // //////////////////////////////////////////
+    // LOG IN
+    // //////////////////////////////////////////
     public async Task<AuthSessionResult> LoginAsync(LoginDto dto)
     {
         if (dto == null) throw new BadRequestException("Invalid data.");
@@ -149,6 +190,7 @@ public class AuthService : IAuthService
 
         if (user == null || !passwordMatch) throw new BadRequestException("Email/password incorrect.");
         if (!user.IsActive) throw new ForbiddenException("User account is disabled.");
+        if (!user.EmailConfirmed) throw new ForbiddenException("Please verify your email before signing in.");
 
         var refreshToken = GenerateRefreshToken();
         var refreshTokenExpiresAt = DateTime.UtcNow.AddDays(GetRefreshTokenExpirationDays());
@@ -166,6 +208,9 @@ public class AuthService : IAuthService
         return CreateSessionResult(user, refreshToken, refreshTokenExpiresAt);
     }
 
+    // //////////////////////////////////////////
+    // REFRESH SESSION
+    // //////////////////////////////////////////
     public async Task<AuthSessionResult> RefreshAsync(string refreshToken)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
@@ -236,6 +281,9 @@ public class AuthService : IAuthService
             newRefreshTokenExpiresAt);
     }
 
+    // //////////////////////////////////////////
+    // LOGOUT
+    // //////////////////////////////////////////
     public async Task LogoutAsync(string? refreshToken)
     {
         if (string.IsNullOrWhiteSpace(refreshToken)) return;
@@ -250,4 +298,81 @@ public class AuthService : IAuthService
         if (familyId.HasValue)
             await RevokeTokenFamilyAsync(familyId.Value);
     }
+
+    // //////////////////////////////////////////
+    // VERIFY EMAIL
+    // //////////////////////////////////////////
+    public async Task<bool> VerifyEmailAsync(VerifyEmailDto dto)
+    {
+        if (dto == null) throw new BadRequestException("Invalid data.");
+
+        var email = dto.Email.Trim().ToLowerInvariant();
+        var code = dto.Code.Trim();
+
+        var user = await _db.Users.FirstOrDefaultAsync(user => user.Email == email)
+            ?? throw new NotFoundException("User not found.");
+
+        if (user.EmailConfirmed)
+            throw new ConflictException("This account is already verified. You can sign in.");
+
+        if (string.IsNullOrWhiteSpace(user.EmailVerificationCodeHash) ||
+            user.EmailVerificationExpiresAt == null ||
+            user.EmailVerificationExpiresAt <= DateTime.UtcNow)
+            throw new BadRequestException("Verification code has expired.");
+
+        var codeMatches = BCrypt.Net.BCrypt.Verify(code, user.EmailVerificationCodeHash);
+
+        if (!codeMatches)
+            throw new BadRequestException("Invalid verification code.");
+
+        user.EmailConfirmed = true;
+        user.EmailVerificationCodeHash = null;
+        user.EmailVerificationExpiresAt = null;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    // //////////////////////////////////////////
+    // RESEND EMAIL VERIFICATION CODE
+    // //////////////////////////////////////////
+    public async Task<bool> ResendEmailVerificationCodeAsync(ResendEmailVerificationDto dto)
+    {
+        if (dto == null) throw new BadRequestException("Invalid data.");
+
+        var email = dto.Email.Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(user => user.Email == email)
+            ?? throw new NotFoundException("User not found.");
+
+        if (user.EmailConfirmed)
+            throw new ConflictException("This account is already verified. You can sign in.");
+
+        if (user.EmailVerificationExpiresAt.HasValue)
+        {
+            var resendAvailableAt = user.EmailVerificationExpiresAt.Value
+                .AddMinutes(-(EmailVerificationCodeExpirationMinutes - EmailVerificationResendCooldownMinutes));
+
+            if (DateTime.UtcNow < resendAvailableAt)
+            {
+                var remainingMinutes = Math.Ceiling((resendAvailableAt - DateTime.UtcNow).TotalMinutes);
+                throw new ConflictException($"Please wait {remainingMinutes} minute(s) before requesting another code.");
+            }
+        }
+
+        var verificationCode = GenerateVerificationCode();
+
+        user.EmailVerificationCodeHash = BCrypt.Net.BCrypt.HashPassword(verificationCode);
+        user.EmailVerificationExpiresAt = DateTime.UtcNow.AddMinutes(EmailVerificationCodeExpirationMinutes);
+
+        await _db.SaveChangesAsync();
+
+        await _emailService.SendAsync(
+            user.Email,
+            user.FullName,
+            "Verify your AllMarket account",
+            EmailVerificationMessage(verificationCode));
+
+        return true;
+    }
+
 }

@@ -74,6 +74,12 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
                 .WithOne(order => order.User)
                 .HasForeignKey(order => order.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            entity.Property(user => user.EmailConfirmed)
+                .HasDefaultValue(false);
+
+            entity.Property(user => user.EmailVerificationCodeHash)
+                .HasMaxLength(500);
 
             entity.ToTable("Users", table =>
             {

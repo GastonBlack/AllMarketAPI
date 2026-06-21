@@ -115,6 +115,20 @@ public class AuthController : ControllerBase
         return Ok(result.User);
     }
 
+    [HttpPost("verify-email")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> VerifyEmailAsync([FromBody] VerifyEmailDto dto)
+    {
+        return Ok(await _service.VerifyEmailAsync(dto));
+    }
+
+    [HttpPost("resend-verification-code")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> ResendEmailVerificationCodeAsync([FromBody] ResendEmailVerificationDto dto)
+    {
+        return Ok(await _service.ResendEmailVerificationCodeAsync(dto));
+    }
+
     [HttpPost("refresh")]
     [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> RefreshAsync()
