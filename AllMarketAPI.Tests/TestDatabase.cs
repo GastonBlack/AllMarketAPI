@@ -44,6 +44,9 @@ public sealed class TestDatabase : IAsyncDisposable
                 "Phone" TEXT NULL,
                 "Rol" TEXT NOT NULL DEFAULT 'User',
                 "IsActive" INTEGER NOT NULL DEFAULT 1,
+                "EmailConfirmed" INTEGER NOT NULL DEFAULT 0,
+                "EmailVerificationCodeHash" TEXT NULL,
+                "EmailVerificationExpiresAt" TEXT NULL,
                 "CreatedAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "DisabledAt" TEXT NULL
             );

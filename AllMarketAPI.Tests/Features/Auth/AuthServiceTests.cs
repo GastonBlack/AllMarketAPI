@@ -75,7 +75,7 @@ public class AuthServiceTests
             })
             .Build();
 
-        return new AuthService(db, new TestJwtTokenGenerator(), configuration);
+        return new AuthService(db, new TestJwtTokenGenerator(), configuration, new TestEmailService());
     }
 
     private static User CreateUser()
@@ -85,7 +85,8 @@ public class AuthServiceTests
             FullName = "Test User",
             Email = "test@example.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password123!"),
-            Address = "Test Address"
+            Address = "Test Address",
+            EmailConfirmed = true
         };
     }
 
