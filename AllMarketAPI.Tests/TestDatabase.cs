@@ -47,6 +47,8 @@ public sealed class TestDatabase : IAsyncDisposable
                 "EmailConfirmed" INTEGER NOT NULL DEFAULT 0,
                 "EmailVerificationCodeHash" TEXT NULL,
                 "EmailVerificationExpiresAt" TEXT NULL,
+                "PasswordResetCodeHash" TEXT NULL,
+                "PasswordResetExpiresAt" TEXT NULL,
                 "CreatedAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "DisabledAt" TEXT NULL
             );

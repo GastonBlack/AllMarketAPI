@@ -16,6 +16,8 @@ public class AuthService : IAuthService
 {
     private const int EmailVerificationCodeExpirationMinutes = 15;
     private const int EmailVerificationResendCooldownMinutes = 3;
+    private const int PasswordResetCodeExpirationMinutes = 15;
+    private const int PasswordResetResendCooldownMinutes = 3;
 
     // Runs BCrypt even when the email does not exist to reduce timing leaks.
     private static readonly string DummyPasswordHash = BCrypt.Net.BCrypt.HashPassword("dummy-password");
@@ -114,6 +116,16 @@ public class AuthService : IAuthService
             <h1>Verify your account</h1>
             <p>Use this code to verify your AllMarket account:</p>
             <p style="font-size: 28px; font-weight: bold;">{verificationCode}</p>
+            <p>This code expires in 15 minutes.</p>
+        """;
+    }
+
+    private static string PasswordResetMessage(string resetCode)
+    {
+        return $"""
+            <h1>Reset your password</h1>
+            <p>Use this code to reset your AllMarket password:</p>
+            <p style="font-size: 28px; font-weight: bold;">{resetCode}</p>
             <p>This code expires in 15 minutes.</p>
         """;
     }
@@ -297,6 +309,76 @@ public class AuthService : IAuthService
 
         if (familyId.HasValue)
             await RevokeTokenFamilyAsync(familyId.Value);
+    }
+
+    // //////////////////////////////////////////
+    // FORGOT PASSWORD
+    // //////////////////////////////////////////
+    public async Task<bool> ForgotPasswordAsync(ForgotPasswordDto dto)
+    {
+        if (dto == null) throw new BadRequestException("Invalid data.");
+
+        var email = dto.Email.Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(user => user.Email == email);
+
+        if (user == null || !user.IsActive) return true;
+
+        if (user.PasswordResetExpiresAt.HasValue)
+        {
+            var resendAvailableAt = user.PasswordResetExpiresAt.Value
+                .AddMinutes(-(PasswordResetCodeExpirationMinutes - PasswordResetResendCooldownMinutes));
+
+            if (DateTime.UtcNow < resendAvailableAt)
+            {
+                var remainingMinutes = Math.Ceiling((resendAvailableAt - DateTime.UtcNow).TotalMinutes);
+                throw new ConflictException($"Please wait {remainingMinutes} minute(s) before requesting another code.");
+            }
+        }
+
+        var resetCode = GenerateVerificationCode();
+
+        user.PasswordResetCodeHash = BCrypt.Net.BCrypt.HashPassword(resetCode);
+        user.PasswordResetExpiresAt = DateTime.UtcNow.AddMinutes(PasswordResetCodeExpirationMinutes);
+
+        await _db.SaveChangesAsync();
+
+        await _emailService.SendAsync(
+            user.Email,
+            user.FullName,
+            "Reset your AllMarket password",
+            PasswordResetMessage(resetCode));
+
+        return true;
+    }
+
+    public async Task<bool> ResetPasswordAsync(ResetPasswordDto dto)
+    {
+        if (dto == null) throw new BadRequestException("Invalid data.");
+
+        var email = dto.Email.Trim().ToLowerInvariant();
+        var code = dto.Code.Trim();
+        var user = await _db.Users.FirstOrDefaultAsync(user => user.Email == email)
+            ?? throw new BadRequestException("Invalid or expired password reset code.");
+
+        if (string.IsNullOrWhiteSpace(user.PasswordResetCodeHash) ||
+            user.PasswordResetExpiresAt == null ||
+            user.PasswordResetExpiresAt <= DateTime.UtcNow)
+            throw new BadRequestException("Invalid or expired password reset code.");
+
+        if (!BCrypt.Net.BCrypt.Verify(code, user.PasswordResetCodeHash))
+            throw new BadRequestException("Invalid or expired password reset code.");
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        user.PasswordResetCodeHash = null;
+        user.PasswordResetExpiresAt = null;
+
+        await _db.RefreshTokens
+            .Where(token => token.UserId == user.Id && token.RevokedAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(token => token.RevokedAt, DateTime.UtcNow));
+
+        await _db.SaveChangesAsync();
+        return true;
     }
 
     // //////////////////////////////////////////

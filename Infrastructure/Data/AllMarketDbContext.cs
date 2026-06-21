@@ -81,6 +81,9 @@ public class AllMarketDbContext(DbContextOptions<AllMarketDbContext> options) : 
             entity.Property(user => user.EmailVerificationCodeHash)
                 .HasMaxLength(500);
 
+            entity.Property(user => user.PasswordResetCodeHash)
+                .HasMaxLength(500);
+
             entity.ToTable("Users", table =>
             {
                 table.HasCheckConstraint(

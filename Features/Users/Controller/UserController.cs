@@ -58,4 +58,12 @@ public class UserController : ControllerBase
         int userId = User.GetAuthenticatedUserId();
         return Ok(await _service.ChangePasswordAsync(dto, userId));
     }
+
+    [HttpPost("me/password-code")]
+    [EnableRateLimiting(RateLimitPolicies.PasswordChange)]
+    public async Task<IActionResult> RequestPasswordChangeCodeAsync()
+    {
+        int userId = User.GetAuthenticatedUserId();
+        return Ok(await _service.RequestPasswordChangeCodeAsync(userId));
+    }
 }

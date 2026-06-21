@@ -19,6 +19,8 @@ public class User
     public bool EmailConfirmed { get; set; } = false;
     public string? EmailVerificationCodeHash { get; set; }
     public DateTime? EmailVerificationExpiresAt { get; set; }
+    public string? PasswordResetCodeHash { get; set; }
+    public DateTime? PasswordResetExpiresAt { get; set; }
 
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

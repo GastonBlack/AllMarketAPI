@@ -122,6 +122,20 @@ public class AuthController : ControllerBase
         return Ok(await _service.VerifyEmailAsync(dto));
     }
 
+    [HttpPost("forgot-password")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> ForgotPasswordAsync([FromBody] ForgotPasswordDto dto)
+    {
+        return Ok(await _service.ForgotPasswordAsync(dto));
+    }
+
+    [HttpPost("reset-password")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> ResetPasswordAsync([FromBody] ResetPasswordDto dto)
+    {
+        return Ok(await _service.ResetPasswordAsync(dto));
+    }
+
     [HttpPost("resend-verification-code")]
     [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> ResendEmailVerificationCodeAsync([FromBody] ResendEmailVerificationDto dto)

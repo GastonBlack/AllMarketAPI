@@ -17,7 +17,9 @@ public class UserServiceTests
             FullName = "Test User",
             Email = "test@example.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Current123!"),
-            Address = "Test Address"
+            Address = "Test Address",
+            PasswordResetCodeHash = BCrypt.Net.BCrypt.HashPassword("123456"),
+            PasswordResetExpiresAt = DateTime.UtcNow.AddMinutes(15)
         };
         database.Db.Users.Add(user);
         await database.Db.SaveChangesAsync();
@@ -30,12 +32,13 @@ public class UserServiceTests
             User = null!
         });
         await database.Db.SaveChangesAsync();
-        var service = new UserService(database.Db);
+        var service = new UserService(database.Db, new TestEmailService());
 
         var changed = await service.ChangePasswordAsync(new ChangePasswordDto
         {
             CurrentPassword = "Current123!",
-            NewPassword = "NewPassword123!"
+            NewPassword = "NewPassword123!",
+            Code = "123456"
         }, user.Id);
 
         database.Db.ChangeTracker.Clear();
